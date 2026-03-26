@@ -1,0 +1,73 @@
+:root {
+  /* Palette — Amber-forward with cool neutrals for contrast */
+  --amber-50: #fffbeb;
+  --amber-100: #fef3c7;
+  --amber-200: #fde68a;
+  --amber-300: #fcd34d;
+  --amber-400: #fbbf24;
+  --amber-500: #f59e0b;
+  --amber-600: #d97706;
+  --amber-700: #b45309;
+  --amber-800: #92400e;
+  --amber-900: #78350f;
+
+  --slate-900: #0b1220;
+  --slate-800: #111827;
+  --slate-700: #1f2937;
+  --slate-600: #374151;
+  --slate-500: #4b5563;
+  --slate-400: #9ca3af;
+  --slate-300: #d1d5db;
+  --slate-200: #e5e7eb;
+  --slate-100: #f3f4f6;
+
+  /* Semantic tokens */
+  --bg: var(--slate-900);
+  --surface: #0f172a;
+  --surface-elevated: rgba(255, 255, 255, 0.04);
+  --text: #e5e7eb;
+  --muted: #9ca3af;
+  --border: rgba(255, 255, 255, 0.08);
+  --accent: var(--amber-500);
+  --accent-strong: var(--amber-600);
+  --accent-muted: rgba(245, 158, 11, 0.18);
+  --success: #34d399;
+  --error: #f87171;
+  --warning: var(--amber-400);
+
+  /* Elevation & radii */
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.14);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.18);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.24);
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans, "Inter", system-ui, -apple-system, sans-serif);
+  --font-mono: var(--font-geist-mono, "SFMono-Regular", Menlo, Consolas, monospace);
+  --text-xs: 12px;
+  --text-sm: 14px;
+  --text-base: 16px;
+  --text-lg: 18px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration: 180ms;
+  --duration-slow: 260ms;
+  --easing: cubic-bezier(0.4, 0.1, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-fast: 0ms;
+    --duration: 0ms;
+    --duration-slow: 0ms;
+    --easing: linear;
+  }
+}

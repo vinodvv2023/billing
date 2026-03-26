@@ -4,8 +4,8 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import User, OAuthAccount
-from ..security import create_access_token
+from ..models import User, OAuthAccount, AuditLog
+from ..security import create_access_token, get_roles_from_user
 from ..oauth_registry import oauth
 
 router = APIRouter(prefix="/auth", tags=["OAuth Providers"])
@@ -123,12 +123,32 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
     
     if oauth_acc:
         user = oauth_acc.user
+        # If the linked user was deleted, recreate and relink to keep OAuth usable
+        if not user:
+            user = User(email=email, full_name=user_info.get("name"))
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+            oauth_acc.user_id = user.id
+            db.add(AuditLog(
+                action="oauth_relinked_user",
+                actor_id=user.id,
+                target_type="user",
+                target_id=user.id,
+                provider=provider,
+                email=email,
+            ))
+            db.commit()
     else:
         # Check if user with this email exists (link accounts dynamically or create new)
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            user = User(email=email)
+            user = User(email=email, full_name=user_info.get("name"))
             db.add(user)
+            db.commit()
+            db.refresh(user)
+        elif not user.full_name and user_info.get("name"):
+            user.full_name = user_info.get("name")
             db.commit()
             db.refresh(user)
             
@@ -139,10 +159,23 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
             user_id=user.id
         )
         db.add(new_oauth_acc)
+        db.add(AuditLog(
+            action="oauth_account_linked",
+            actor_id=user.id,
+            target_type="user",
+            target_id=user.id,
+            provider=provider,
+            email=email,
+        ))
         db.commit()
 
     # Create JWT for our system
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(data={
+        "sub": user.email,
+        "roles": get_roles_from_user(user),
+        "uid": user.id,
+        "full_name": user.full_name,
+    })
     
     # Redirect to frontend with token in URL (standard for SPAs handling OAuth)
     # Alternatively could set an HttpOnly cookie here.

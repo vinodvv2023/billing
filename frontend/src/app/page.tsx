@@ -1,45 +1,41 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { LoginForm } from "@/components/LoginForm";
 import { OAuthButton } from "@/components/OAuthButton";
 import { motion } from "framer-motion";
-
-const BACKEND_URL = "http://localhost:8000";
+import { appConfig } from "@/lib/config";
+import { useSession } from "@/lib/session";
+import { loginLocal, registerLocal } from "@/lib/auth-client";
+import { getLastOAuthProvider, setLastOAuthProvider } from "@/lib/last-login";
 
 export default function Home() {
   const router = useRouter();
+  const { setToken } = useSession();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastOAuth, setLastOAuth] = useState<string | null>(null);
 
-  const handleLocalAuth = async (email: string, pass: string, isRegister: boolean) => {
+  // If already authenticated (token present), skip the signin screen
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (token) {
+      router.replace("/dashboard");
+    }
+    setLastOAuth(getLastOAuthProvider());
+  }, [router]);
+
+  const handleLocalAuth = async (email: string, pass: string, isRegister: boolean, role?: string) => {
     setIsLoading(true);
     setError(null);
     try {
-      const endpoint = isRegister ? "/auth/register" : "/auth/token";
-      
-      const body = isRegister 
-        ? JSON.stringify({ email, password: pass })
-        : new URLSearchParams({ username: email, password: pass });
-        
-      const res = await fetch(`${BACKEND_URL}${endpoint}`, {
-        method: "POST",
-        headers: isRegister 
-          ? { "Content-Type": "application/json" }
-          : { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
+      const token = isRegister
+        ? await registerLocal(email, pass, role)
+        : await loginLocal(email, pass);
 
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.detail || "Authentication failed");
-      }
-
-      // Success
-      localStorage.setItem("token", data.access_token);
-      alert("Authenticated successfully! Token saved.");
-      // router.push("/dashboard");
+      setToken(token);
+      router.replace("/dashboard");
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -48,7 +44,8 @@ export default function Home() {
   };
 
   const handleOAuth = (provider: string) => {
-    window.location.href = `${BACKEND_URL}/auth/${provider}/login`;
+    setLastOAuthProvider(provider);
+    window.location.href = `${appConfig.apiUrl}/auth/${provider}/login`;
   };
 
   const GoogleIcon = <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="20" height="20"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>;
@@ -58,83 +55,69 @@ export default function Home() {
 
 
   return (
-    <main className="relative min-h-screen w-full overflow-hidden bg-black flex items-center justify-center p-4 sm:p-8">
-      {/* Premium Animated Background Gradients */}
+    <main className="relative min-h-screen w-full overflow-hidden bg-[var(--bg)] px-4 py-12 sm:px-10">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -top-[40%] -left-[10%] w-[70%] h-[70%] rounded-full bg-cyan-900/30 blur-[120px]" />
-        <div className="absolute top-[60%] -right-[10%] w-[60%] h-[60%] rounded-full bg-blue-900/20 blur-[120px]" />
+        <div className="absolute -top-24 -left-32 h-80 w-80 rounded-full bg-amber-500/12 blur-[140px]" />
+        <div className="absolute bottom-0 right-0 h-96 w-[28rem] rounded-full bg-white/5 blur-[140px]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-24 items-center">
-        
-        {/* Left Side: Branding / Intro */}
-        <motion.div 
-          initial={{ opacity: 0, x: -50 }}
+      <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-start">
+        <motion.div
+          initial={{ opacity: 0, x: -35 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.7 }}
-          className="hidden lg:flex flex-col gap-6"
+          transition={{ duration: 0.6 }}
+          className="space-y-6 lg:flex-1"
         >
-          <div className="inline-flex items-center rounded-full border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 text-sm font-medium text-cyan-400 backdrop-blur-md w-fit">
-            ✨ Next Generation Authentication
-          </div>
-          <h1 className="text-5xl font-extrabold tracking-tight text-white leading-tight">
-            Secure, fast, and <br />
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-500">
-              seamless access.
-            </span>
+          <span className="inline-flex items-center rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-200">
+            Next-gen authentication
+          </span>
+          <h1 className="text-4xl font-bold leading-tight text-white sm:text-5xl max-w-xl">
+            Secure, fast, and seamless access for every role.
           </h1>
-          <p className="text-lg text-zinc-400 max-w-md leading-relaxed">
-            Experience frictionless login with standard credentials or instantly connect using your favorite social identity providers.
+          <p className="text-base text-white/70 sm:text-lg max-w-2xl">
+            Unified local + OAuth login with RBAC-ready UX so Super Admins, Agencies, and Companies can get to work
+            without friction.
           </p>
+          <ul className="space-y-2 text-white/70">
+            <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" />Cookie-mode ready (opt-in), with CSRF guard stubbed for production.</li>
+            <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" />Accessible inputs, toasts, and clearer validation.</li>
+            <li className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-amber-400" />Multi-provider OAuth with consistent UI affordances.</li>
+          </ul>
         </motion.div>
 
-        {/* Right Side: Auth Forms */}
-        <div className="w-full flex flex-col items-center">
-          <LoginForm 
-            onLogin={(e, p) => handleLocalAuth(e, p, false)} 
-            onRegister={(e, p) => handleLocalAuth(e, p, true)}
+        <div className="w-full max-w-md lg:flex-1 lg:max-w-none lg:self-start">
+          <div className="mx-auto w-full max-w-md">
+          <LoginForm
+            onLogin={(e, p) => handleLocalAuth(e, p, false)}
+            onRegister={(e, p, r) => handleLocalAuth(e, p, true, r)}
             isLoading={isLoading}
             error={error}
           />
+          </div>
 
-          <div className="mt-8 w-full max-w-md">
-            <div className="relative flex items-center py-4">
-              <div className="flex-grow border-t border-white/10"></div>
-              <span className="mx-4 flex-shrink-0 text-xs text-zinc-500 font-medium uppercase tracking-wider">
+          <div className="mt-6 mx-auto w-full max-w-md">
+            {lastOAuth && (
+              <div className="mb-2 text-xs font-semibold text-amber-200">
+                Last signed in with {lastOAuth.charAt(0).toUpperCase() + lastOAuth.slice(1)}
+              </div>
+            )}
+
+            <div className="relative flex items-center py-3">
+              <div className="flex-grow border-t border-white/10" />
+              <span className="mx-4 flex-shrink-0 text-xs uppercase tracking-widest text-white/50">
                 Or continue with
               </span>
-              <div className="flex-grow border-t border-white/10"></div>
+              <div className="flex-grow border-t border-white/10" />
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mt-2">
-              <OAuthButton 
-                provider="google" 
-                label="Google" 
-                icon={GoogleIcon} 
-                onClick={() => handleOAuth("google")} 
-              />
-              <OAuthButton 
-                provider="github" 
-                label="GitHub" 
-                icon={GithubIcon} 
-                onClick={() => handleOAuth("github")} 
-              />
-              <OAuthButton 
-                provider="microsoft" 
-                label="Microsoft" 
-                icon={MicrosoftIcon} 
-                onClick={() => handleOAuth("microsoft")} 
-              />
-              <OAuthButton 
-                provider="twitter" 
-                label="Twitter" 
-                icon={TwitterIcon} 
-                onClick={() => handleOAuth("twitter")} 
-              />
+            <div className="grid grid-cols-2 gap-3">
+              <OAuthButton provider="google" label="Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} isHighlighted={lastOAuth === "google"} />
+              <OAuthButton provider="github" label="GitHub" icon={GithubIcon} onClick={() => handleOAuth("github")} isHighlighted={lastOAuth === "github"} />
+              <OAuthButton provider="microsoft" label="Microsoft" icon={MicrosoftIcon} onClick={() => handleOAuth("microsoft")} isHighlighted={lastOAuth === "microsoft"} />
+              <OAuthButton provider="twitter" label="Twitter" icon={TwitterIcon} onClick={() => handleOAuth("twitter")} isHighlighted={lastOAuth === "twitter"} />
             </div>
           </div>
         </div>
-
       </div>
     </main>
   );

@@ -16,4 +16,4 @@ echo Both services are spinning up in separate windows!
 echo Backend API Docs: http://127.0.0.1:8000/docs
 echo Frontend App:     http://localhost:3000
 echo.
-pause
+

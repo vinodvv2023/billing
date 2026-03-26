@@ -37,3 +37,11 @@ def decode_access_token(token: str):
         return payload
     except JWTError:
         return None
+
+def get_roles_from_user(user) -> list[str]:
+    role = getattr(user, "role", None)
+    if not role:
+        return []
+    if isinstance(role, list):
+        return role
+    return [str(role)]
