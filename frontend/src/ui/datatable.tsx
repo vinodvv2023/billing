@@ -18,6 +18,11 @@ interface DataTableProps<T> {
 }
 
 export function DataTable<T>({ data, columns, emptyState, className }: DataTableProps<T>) {
+  const getValue = (item: T, key: keyof T | string) => {
+    if (typeof key !== "string") return item[key];
+    return (item as Record<string, unknown>)[key];
+  };
+
   return (
     <div className={cn("overflow-hidden rounded-[14px] border border-white/10 bg-white/5", className)}>
       <table className="min-w-full border-collapse text-sm text-white/80">
@@ -46,7 +51,7 @@ export function DataTable<T>({ data, columns, emptyState, className }: DataTable
             <tr key={idx} className="border-t border-white/5 hover:bg-white/[0.03]">
               {columns.map((col) => (
                 <td key={col.key as string} className="px-4 py-3">
-                  {col.render ? col.render(item) : String((item as any)[col.key])}
+                  {col.render ? col.render(item) : String(getValue(item, col.key) ?? "")}
                 </td>
               ))}
             </tr>

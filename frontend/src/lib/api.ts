@@ -1,7 +1,5 @@
 import { appConfig } from "./config";
 
-type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
-
 async function request<T>(path: string, options?: RequestInit & { csrfToken?: string }) {
   const url = `${appConfig.apiUrl}${path}`;
 

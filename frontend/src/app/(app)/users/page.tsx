@@ -1,31 +1,49 @@
 "use client";
 
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { DataTable } from "@/ui/datatable";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Skeleton } from "@/ui/skeleton";
-import { useUsers, useInviteUser, useUpdateUserRole, useDeleteUser, useOrganizations } from "@/lib/api-hooks";
-import type { OrganizationSummary, UserSummary } from "@/lib/api-hooks";
+import { useUsers, useInviteUser, useUpdateUserRole, useDeleteUser, useOrganizations, useClients } from "@/lib/api-hooks";
+import type { ClientRecord, OrganizationSummary, UserSummary } from "@/lib/api-hooks";
 import { useSession } from "@/lib/session";
 import { useTenantScope } from "@/lib/tenant-scope";
 import { Input } from "@/ui/input";
 import { MultiSelect } from "@/ui/multi-select";
 import { useToast } from "@/ui/toast";
+import { ExternalLink, Link as LinkIcon } from "lucide-react";
 import { useState } from "react";
+import { ClientPortalRedirect } from "@/components/client-portal-redirect";
 
-const adminRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"];
+const adminRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "org_admin"];
 const roleOptionsByAdmin: Record<string, string[]> = {
-  "Super Admin": ["Super Admin", "Agency Admin", "Agency Company Admin", "Agency User", "Company Admin", "Company User", "Individual User"],
-  "Agency Admin": ["Agency Company Admin", "Agency User"],
-  "Agency Company Admin": ["Agency User"],
-  "Company Admin": ["Company User"],
+  "Super Admin": ["Super Admin", "Agency Admin", "Agency Company Admin", "Agency User", "Company Admin", "Company User", "Individual User", "employee", "project_manager", "finance", "org_admin", "client"],
+  "Agency Admin": ["Agency Company Admin", "Agency User", "employee", "project_manager", "finance", "client"],
+  "Agency Company Admin": ["Agency User", "employee", "project_manager", "finance", "client"],
+  "Company Admin": ["Company User", "employee", "project_manager", "finance", "client"],
+  "org_admin": ["employee", "project_manager", "finance", "client"],
 };
 
 export default function UsersPage() {
+  const { effectiveRole } = useTenantScope();
+  if (effectiveRole === "client") {
+    return (
+      <ClientPortalRedirect
+        title="Redirecting to invoices"
+        description="User invitations, role assignment, and organization access are internal administration workflows. Client logins are redirected to the invoice portal."
+      />
+    );
+  }
+  return <InternalUsersPage />;
+}
+
+function InternalUsersPage() {
   const { effectiveRole, activeOrganizationId } = useTenantScope();
   const { data, isLoading, error } = useUsers(activeOrganizationId);
   const { data: organizations } = useOrganizations();
+  const { data: clients } = useClients(activeOrganizationId);
   const invite = useInviteUser();
   const updateRole = useUpdateUserRole();
   const deleteUser = useDeleteUser();
@@ -37,9 +55,11 @@ export default function UsersPage() {
   const canManageRole = (role: string) => allowedRoleOptions.includes(role);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
   const [selectedOrgIds, setSelectedOrgIds] = useState<number[]>([]);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   const [directorySearch, setDirectorySearch] = useState("");
+  const [latestInvite, setLatestInvite] = useState<Pick<UserSummary, "email" | "invite_link" | "invite_expires_at"> | null>(null);
   const toast = useToast();
 
   const rows = (data ?? []).filter((user) => {
@@ -59,6 +79,8 @@ export default function UsersPage() {
   const selectedInviteRole =
     allowedRoleOptions.includes(inviteRole) ? inviteRole : (allowedRoleOptions[0] ?? "");
   const effectiveOrgIds = selectedOrgIds.length > 0 ? selectedOrgIds : inviteOrganizations.length === 1 ? [inviteOrganizations[0].id] : [];
+  const needsClientSelection = selectedInviteRole === "client";
+  const hasClientOptions = (clients?.length ?? 0) > 0;
 
   return (
     <div className="space-y-4">
@@ -86,10 +108,28 @@ export default function UsersPage() {
                   });
                   return;
                 }
+                if (needsClientSelection && !selectedClientId) {
+                  toast.push({
+                    title: "Select client",
+                    description: "Client-role invites must be linked to a client account.",
+                    variant: "error",
+                  });
+                  return;
+                }
                 invite.mutate(
-                  { email: inviteEmail, role: selectedInviteRole, organization_ids: effectiveOrgIds },
+                  {
+                    email: inviteEmail,
+                    role: selectedInviteRole,
+                    organization_ids: effectiveOrgIds,
+                    client_id: needsClientSelection ? selectedClientId : null,
+                  },
                   {
                     onSuccess: (result: UserSummary) => {
+                      setLatestInvite({
+                        email: result.email,
+                        invite_link: result.invite_link ?? null,
+                        invite_expires_at: result.invite_expires_at ?? null,
+                      });
                       if (result?.invite_link) {
                         navigator.clipboard.writeText(result.invite_link).catch(() => undefined);
                         toast.push({
@@ -115,6 +155,7 @@ export default function UsersPage() {
                 );
                 setInviteEmail("");
                 setSelectedOrgIds([]);
+                setSelectedClientId(null);
               }}
             >
               <label className="space-y-2">
@@ -140,6 +181,37 @@ export default function UsersPage() {
                 </select>
               </label>
 
+              {needsClientSelection && (
+                <div className="space-y-3 lg:col-span-3">
+                  <label className="space-y-2">
+                    <span className="text-xs uppercase tracking-[0.18em] text-white/45">Client account</span>
+                    <select
+                      value={selectedClientId ?? ""}
+                      onChange={(e) => setSelectedClientId(Number(e.target.value) || null)}
+                      disabled={!hasClientOptions}
+                      className="h-11 w-full rounded-[12px] border border-white/15 bg-[#0b1220] px-3 pr-8 text-sm text-white focus:border-amber-400 focus:outline-none appearance-none disabled:opacity-50"
+                    >
+                      <option value="">{hasClientOptions ? "Select client" : "No client accounts available"}</option>
+                      {(clients ?? []).map((client: ClientRecord) => (
+                        <option key={client.id} value={client.id}>{client.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  {!hasClientOptions && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[14px] border border-amber-400/20 bg-amber-400/10 px-3 py-3 text-sm text-amber-50">
+                      <div>
+                        <div className="font-medium">No client accounts found for this organization.</div>
+                        <div className="text-xs text-amber-100/80">Create the client first, then return here to send the magic link invite.</div>
+                      </div>
+                      <Link href="/clients" className="inline-flex">
+                        <Button size="sm" variant="outline">Create client</Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <Button size="sm" type="submit" disabled={invite.isPending} className="lg:self-end">
                 Invite
               </Button>
@@ -164,6 +236,48 @@ export default function UsersPage() {
                 </div>
               )}
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {latestInvite?.invite_link && (
+        <Card className="border-emerald-400/20 bg-[linear-gradient(135deg,rgba(16,185,129,0.12),rgba(255,255,255,0.03))]">
+          <CardHeader>
+            <CardTitle>Latest Magic Link</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm text-white/70">
+              Invite ready for <span className="font-semibold text-white">{latestInvite.email}</span>.
+            </div>
+            <div className="rounded-[14px] border border-white/10 bg-black/20 px-3 py-3 text-xs text-white/80 break-all">
+              {latestInvite.invite_link}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                leftIcon={<LinkIcon className="h-4 w-4" />}
+                onClick={() => {
+                  navigator.clipboard.writeText(latestInvite.invite_link ?? "").catch(() => undefined);
+                  toast.push({ title: "Magic link copied", variant: "success" });
+                }}
+              >
+                Copy link
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                leftIcon={<ExternalLink className="h-4 w-4" />}
+                onClick={() => window.open(latestInvite.invite_link ?? "", "_blank", "noopener,noreferrer")}
+              >
+                Open link
+              </Button>
+            </div>
+            {latestInvite.invite_expires_at && (
+              <div className="text-xs text-white/45">
+                Expires: {new Date(latestInvite.invite_expires_at).toLocaleString()}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
@@ -207,22 +321,29 @@ export default function UsersPage() {
                   key: "role",
                   header: "Role",
                   render: (r) => (
-                    <select
-                      defaultValue={r.role}
-                      disabled={!canEdit || !canManageRole(r.role)}
-                      onChange={(e) =>
-                        updateRole.mutate({ userId: r.id, role: e.target.value, organization_ids: visibleOrganizationIds })
-                      }
-                      className="h-9 rounded-[10px] border border-white/15 bg-[#0b1220] px-2 pr-8 text-xs text-white focus:border-amber-400 focus:outline-none appearance-none"
-                    >
-                      {canManageRole(r.role) ? (
-                        allowedRoleOptions.map((role) => (
-                          <option key={role} value={role}>{role}</option>
-                        ))
-                      ) : (
-                        <option value={r.role}>{r.role}</option>
-                      )}
-                    </select>
+                    <div className="space-y-1">
+                      <select
+                        defaultValue={r.role}
+                        disabled={!canEdit || !canManageRole(r.role)}
+                        onChange={(e) =>
+                          updateRole.mutate({ userId: r.id, role: e.target.value, organization_ids: visibleOrganizationIds })
+                        }
+                        className="h-9 rounded-[10px] border border-white/15 bg-[#0b1220] px-2 pr-8 text-xs text-white focus:border-amber-400 focus:outline-none appearance-none"
+                      >
+                        {canManageRole(r.role) ? (
+                          allowedRoleOptions.map((role) => (
+                            <option key={role} value={role}>{role}</option>
+                          ))
+                        ) : (
+                          <option value={r.role}>{r.role}</option>
+                        )}
+                      </select>
+                      {r.client_id ? (
+                        <div className="text-[11px] text-white/45">
+                          Linked client: {(clients ?? []).find((client) => client.id === r.client_id)?.name ?? `#${r.client_id}`}
+                        </div>
+                      ) : null}
+                    </div>
                   ),
                 },
                 {

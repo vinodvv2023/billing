@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 
 
 DB_FD, DB_PATH = tempfile.mkstemp(suffix=".db")
@@ -11,7 +12,7 @@ from fastapi.testclient import TestClient
 
 from app.database import Base, SessionLocal, engine
 from app.main import app
-from app.models import Organization, OrganizationMember, User
+from app.models import InviteToken, Organization, OrganizationMember, User
 from app.security import create_access_token, get_password_hash, get_roles_from_user
 
 
@@ -23,6 +24,7 @@ class RBACInviteTests(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         cls.client.close()
+        engine.dispose()
         if os.path.exists(DB_PATH):
             os.remove(DB_PATH)
 
@@ -122,6 +124,29 @@ class RBACInviteTests(unittest.TestCase):
         )
 
         self.assertEqual(response.status_code, 400, response.text)
+
+    def test_magic_link_validate_allows_timezone_aware_expiry(self):
+        db = SessionLocal()
+        try:
+            user = User(email="aware-expiry@example.com", hashed_password=None, role="Agency Company Admin")
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
+            invite = InviteToken(
+                user_id=user.id,
+                token="aware-expiry-token",
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+            db.add(invite)
+            db.commit()
+        finally:
+            db.close()
+
+        response = self.client.get("/auth/magic/validate?token=aware-expiry-token")
+
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"email": "aware-expiry@example.com"})
 
 
 if __name__ == "__main__":

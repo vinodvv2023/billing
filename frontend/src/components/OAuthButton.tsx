@@ -21,14 +21,17 @@ export function OAuthButton({ provider, icon, label, onClick, className, isHighl
         type="button"
         variant={isHighlighted ? "primary" : "outline"}
         className={cn(
-          "w-full justify-center",
-          isHighlighted ? "shadow-lg shadow-amber-500/40" : "bg-white/5",
+          "h-12 w-full justify-start rounded-[18px] px-4",
+          isHighlighted ? "shadow-lg shadow-amber-500/30" : "bg-white/[0.03]",
           className
         )}
         onClick={onClick}
-        leftIcon={<span className="h-5 w-5 fill-current">{icon}</span>}
+        leftIcon={<span className="flex h-5 w-5 items-center justify-center fill-current">{icon}</span>}
       >
-        {label}
+        <span className="flex flex-1 items-center justify-between">
+          <span>{label}</span>
+          <span className="font-mono text-[11px] uppercase tracking-[0.18em] text-current/70">{provider}</span>
+        </span>
       </Button>
     </motion.div>
   );

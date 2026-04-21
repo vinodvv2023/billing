@@ -4,7 +4,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base
-from .routers import auth_local, auth_oauth, rbac
+from .routers import auth_local, auth_oauth, billing, clients, rbac, timesheets
 
 # Create tables if not exist (In production, use Alembic migrations)
 Base.metadata.create_all(bind=engine)
@@ -27,6 +27,9 @@ app.add_middleware(
 app.include_router(auth_local.router)
 app.include_router(auth_oauth.router)
 app.include_router(rbac.router)
+app.include_router(clients.router)
+app.include_router(timesheets.router)
+app.include_router(billing.router)
 
 @app.get("/")
 def root():

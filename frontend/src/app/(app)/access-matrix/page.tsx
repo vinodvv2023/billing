@@ -1,3 +1,7 @@
+"use client";
+
+import { ClientPortalRedirect } from "@/components/client-portal-redirect";
+import { useTenantScope } from "@/lib/tenant-scope";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Badge } from "@/ui/badge";
 
@@ -32,6 +36,16 @@ const matrix: Record<string, boolean[]> = {
 };
 
 export default function AccessMatrixPage() {
+  const { effectiveRole } = useTenantScope();
+  if (effectiveRole === "client") {
+    return (
+      <ClientPortalRedirect
+        title="Redirecting to invoices"
+        description="The access matrix is an internal governance view. Client logins are redirected to the invoice portal."
+      />
+    );
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">

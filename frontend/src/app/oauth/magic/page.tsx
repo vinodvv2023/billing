@@ -7,6 +7,7 @@ import { Input } from "@/ui/input";
 import { Button } from "@/ui/button";
 import { Badge } from "@/ui/badge";
 import { Skeleton } from "@/ui/skeleton";
+import { defaultRouteForRoles } from "@/lib/role-routing";
 import { useSession } from "@/lib/session";
 import { useToast } from "@/ui/toast";
 import { appConfig } from "@/lib/config";
@@ -68,9 +69,12 @@ function MagicLinkContent() {
         throw new Error(data.detail || "Failed to activate");
       }
       const data = await res.json();
+      const tokenParts = String(data.access_token ?? "").split(".");
+      const payload = tokenParts.length >= 2 ? JSON.parse(atob(tokenParts[1].replace(/-/g, "+").replace(/_/g, "/"))) : {};
+      const claimRoles = Array.isArray(payload?.roles) ? payload.roles : typeof payload?.role === "string" ? [payload.role] : [];
       setToken(data.access_token);
       toast.push({ title: "Account activated", variant: "success" });
-      router.push("/dashboard");
+      router.push(defaultRouteForRoles(claimRoles));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

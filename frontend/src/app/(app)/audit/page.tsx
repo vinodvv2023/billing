@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { useAuditLogs } from "@/lib/api-hooks";
+import { type AuditEntry, useAuditLogs } from "@/lib/api-hooks";
+import { useTenantScope } from "@/lib/tenant-scope";
+import { ClientPortalRedirect } from "@/components/client-portal-redirect";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import { Badge } from "@/ui/badge";
 import { DataTable } from "@/ui/datatable";
@@ -23,15 +25,24 @@ const actionOptions = [
 ];
 
 export default function AuditPage() {
-  const [action, setAction] = useState("");
-  const { data, isLoading, error, refetch } = useAuditLogs(action || undefined);
-  const rows = data ?? [];
-  const isEmpty = !isLoading && !error && rows.length === 0;
+  const { effectiveRole } = useTenantScope();
+  if (effectiveRole === "client") {
+    return (
+      <ClientPortalRedirect
+        title="Redirecting to invoices"
+        description="Audit history is an internal compliance view. Client logins are redirected to the invoice portal."
+      />
+    );
+  }
+  return <InternalAuditPage />;
+}
 
-  const sortedRows = useMemo(
-    () => rows.map((r: any) => ({ ...r, created_at: r.created_at ?? r.createdAt })),
-    [rows]
-  );
+function InternalAuditPage() {
+  const [action, setAction] = useState("");
+  const { data, isLoading, error } = useAuditLogs(action || undefined);
+  const rows = useMemo<AuditEntry[]>(() => data ?? [], [data]);
+  const sortedRows = useMemo<AuditEntry[]>(() => rows.map((row) => ({ ...row, created_at: row.created_at })), [rows]);
+  const isEmpty = !isLoading && !error && rows.length === 0;
 
   const formatWhen = (value?: string) => {
     if (!value) return "—";
@@ -69,7 +80,6 @@ export default function AuditPage() {
             value={action}
             onChange={(e) => {
               setAction(e.target.value);
-              refetch();
             }}
             className="h-11 w-44"
           >
@@ -116,7 +126,7 @@ export default function AuditPage() {
                 {
                   key: "created_at",
                   header: "When",
-                  render: (r: any) => formatWhen(r.created_at),
+                  render: (row: AuditEntry) => formatWhen(row.created_at),
                 },
               ]}
             />

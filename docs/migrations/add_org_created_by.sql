@@ -1,1 +1,0 @@
-ALTER TABLE organizations ADD COLUMN IF NOT EXISTS created_by INTEGER REFERENCES users(id);

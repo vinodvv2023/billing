@@ -2,10 +2,10 @@
 @import "../ui/tokens.css";
 
 :root {
-  --background: #0b1220;
-  --foreground: #e5e7eb;
-  --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-mono: "SFMono-Regular", Menlo, Consolas, monospace;
+  --background: #07111f;
+  --foreground: #edf2f7;
+  --font-sans: "Manrope", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
 }
 
 @theme inline {
@@ -16,7 +16,68 @@
 }
 
 body {
-  background: var(--bg);
+  min-height: 100vh;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 16%),
+    var(--page-gradient);
   color: var(--text);
   font-family: var(--font-sans);
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.28);
+  color: var(--text);
+}
+
+a,
+button,
+input,
+select {
+  transition:
+    color var(--duration) var(--easing),
+    background-color var(--duration) var(--easing),
+    border-color var(--duration) var(--easing),
+    box-shadow var(--duration) var(--easing),
+    transform var(--duration) var(--easing);
+}
+
+a[href],
+button:not(:disabled),
+[role="button"],
+summary {
+  cursor: pointer;
+}
+
+a[href] {
+  text-underline-offset: 0.22em;
+}
+
+select,
+select option,
+select optgroup {
+  color: var(--text);
+  background-color: #0b1220;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: var(--text);
+}
+
+* {
+  border-color: var(--border);
 }

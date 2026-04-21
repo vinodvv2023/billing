@@ -5,38 +5,54 @@ import { DataTable } from "@/ui/datatable";
 import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Skeleton } from "@/ui/skeleton";
-import { useProjects, useOrganizations, useCreateProject, useUpdateProject, useDeleteProject } from "@/lib/api-hooks";
-import type { OrganizationSummary } from "@/lib/api-hooks";
-import { useSession } from "@/lib/session";
+import { useProjects, useOrganizations, useCreateProject, useUpdateProject, useDeleteProject, useClients } from "@/lib/api-hooks";
+import type { ClientRecord, OrganizationSummary } from "@/lib/api-hooks";
 import { useTenantScope } from "@/lib/tenant-scope";
 import { Input } from "@/ui/input";
 import { useToast } from "@/ui/toast";
 import { useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Link2 } from "lucide-react";
+import { ClientPortalRedirect } from "@/components/client-portal-redirect";
 
-const adminRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"];
+const adminRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "org_admin"];
 
 export default function ProjectsPage() {
+  const { effectiveRole } = useTenantScope();
+  if (effectiveRole === "client") {
+    return (
+      <ClientPortalRedirect
+        title="Redirecting to invoices"
+        description="Project delivery setup and client linking are internal controls. Client logins are redirected to the invoice portal."
+      />
+    );
+  }
+  return <InternalProjectsPage />;
+}
+
+function InternalProjectsPage() {
   const { data, isLoading, error } = useProjects();
   const { data: orgs } = useOrganizations();
   const createProject = useCreateProject();
   const updateProject = useUpdateProject();
   const deleteProject = useDeleteProject();
-  const { roles } = useSession();
   const { effectiveRole, activeOrganizationId } = useTenantScope();
+  const [selectedOrgOverride, setSelectedOrgOverride] = useState<number | undefined>(undefined);
+  const selectedOrgId = selectedOrgOverride ?? activeOrganizationId ?? undefined;
+  const { data: clients } = useClients(selectedOrgId);
   const canEdit = adminRoles.includes(effectiveRole) || effectiveRole === "Individual User";
-  const isSuperAdmin = roles.includes("Super Admin");
   const [projName, setProjName] = useState("");
-  const [orgId, setOrgId] = useState<number | undefined>(undefined);
+  const [createClientId, setCreateClientId] = useState<number | null>(null);
   const [pendingDelete, setPendingDelete] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editStatus, setEditStatus] = useState("Active");
+  const [editClientId, setEditClientId] = useState<number | null>(null);
   const toast = useToast();
-  const selectedOrgId = orgId ?? activeOrganizationId ?? undefined;
 
   const rows = data ?? [];
   const isEmpty = !isLoading && !error && rows.length === 0;
+  const resolveClientName = (clientId?: number | null) =>
+    clientId == null ? null : clients?.find((client: ClientRecord) => client.id === clientId)?.name ?? `#${clientId}`;
 
   return (
     <div className="space-y-4">
@@ -59,16 +75,17 @@ export default function ProjectsPage() {
         </div>
         {canEdit && (
           <form
-            className="flex flex-wrap items-center gap-2"
+            className="grid w-full gap-3 rounded-[18px] border border-white/10 bg-white/[0.03] p-3 lg:grid-cols-[minmax(0,1.1fr)_220px_220px_auto]"
             onSubmit={(e) => {
               e.preventDefault();
               if (!projName || !selectedOrgId) return;
               createProject.mutate(
-                { name: projName, org_id: selectedOrgId },
+                { name: projName, org_id: selectedOrgId, client_id: createClientId, status: "Active" },
                 {
                   onSuccess: () => {
                     toast.push({ title: "Project created", variant: "success" });
                     setProjName("");
+                    setCreateClientId(null);
                   },
                   onError: (err: Error) =>
                     toast.push({ title: "Create failed", description: String(err?.message ?? err), variant: "error" }),
@@ -80,11 +97,14 @@ export default function ProjectsPage() {
               placeholder="Project name"
               value={projName}
               onChange={(e) => setProjName(e.target.value)}
-              className="w-48"
+              className="w-full"
             />
             <select
               value={selectedOrgId ?? ""}
-              onChange={(e) => setOrgId(Number(e.target.value) || undefined)}
+              onChange={(e) => {
+                setSelectedOrgOverride(Number(e.target.value) || undefined);
+                setCreateClientId(null);
+              }}
               className="h-11 rounded-[12px] border border-white/15 bg-[#0b1220] px-3 pr-8 text-sm text-white focus:border-amber-400 focus:outline-none appearance-none"
             >
               <option value="">Select org</option>
@@ -92,7 +112,18 @@ export default function ProjectsPage() {
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
-            <Button size="sm" type="submit" disabled={createProject.isPending}>New project</Button>
+            <select
+              value={createClientId ?? ""}
+              onChange={(e) => setCreateClientId(Number(e.target.value) || null)}
+              disabled={!selectedOrgId}
+              className="h-11 rounded-[12px] border border-white/15 bg-[#0b1220] px-3 pr-8 text-sm text-white focus:border-amber-400 focus:outline-none appearance-none disabled:opacity-50"
+            >
+              <option value="">No client linked</option>
+              {(clients ?? []).map((client: ClientRecord) => (
+                <option key={client.id} value={client.id}>{client.name}</option>
+              ))}
+            </select>
+            <Button size="sm" type="submit" disabled={createProject.isPending || !selectedOrgId}>New project</Button>
           </form>
         )}
       </div>
@@ -134,6 +165,32 @@ export default function ProjectsPage() {
                     ),
                 },
                 { key: "org", header: "Organization" },
+                {
+                  key: "client_id",
+                  header: "Client",
+                  render: (r) =>
+                    editingId === r.id ? (
+                      <select
+                        value={editClientId ?? ""}
+                        onChange={(e) => setEditClientId(Number(e.target.value) || null)}
+                        className="h-9 min-w-[180px] rounded-[10px] border border-white/15 bg-[#0b1220] px-2 pr-6 text-xs text-white"
+                      >
+                        <option value="">No client linked</option>
+                        {(clients ?? []).map((client: ClientRecord) => (
+                          <option key={client.id} value={client.id}>{client.name}</option>
+                        ))}
+                      </select>
+                    ) : r.client_id ? (
+                      <div className="inline-flex items-center gap-2 text-sm text-white/80">
+                        <span className="rounded-full border border-white/10 bg-white/[0.04] p-1 text-amber-200">
+                          <Link2 className="h-3.5 w-3.5" />
+                        </span>
+                        <span>{resolveClientName(r.client_id)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-white/40">Unlinked</span>
+                    ),
+                },
                 { key: "created_by_email", header: "Owner" },
                 { key: "members", header: "Members" },
                 {
@@ -161,7 +218,7 @@ export default function ProjectsPage() {
                   header: "Actions",
                   width: "140px",
                   render: (r) =>
-                    isSuperAdmin ? (
+                    canEdit ? (
                       <div className="flex gap-2">
                         {editingId === r.id ? (
                           <>
@@ -170,7 +227,7 @@ export default function ProjectsPage() {
                               variant="primary"
                               onClick={() => {
                                 updateProject.mutate(
-                                  { id: r.id, name: editName || r.name, status: editStatus || r.status },
+                                  { id: r.id, name: editName || r.name, status: editStatus || r.status, client_id: editClientId },
                                   {
                                     onSuccess: () => toast.push({ title: "Project updated", variant: "success" }),
                                     onError: (err: Error) =>
@@ -195,6 +252,7 @@ export default function ProjectsPage() {
                                 setEditingId(r.id);
                                 setEditName(r.name);
                                 setEditStatus(r.status);
+                                setEditClientId(r.client_id ?? null);
                               }}
                             >
                               Edit

@@ -7,7 +7,7 @@ import secrets
 from datetime import datetime, timedelta
 
 from ..database import get_db
-from ..models import User, Organization, Project, AuditLog, InviteToken, OAuthAccount, OrganizationMember, ProjectMember
+from ..models import AuditLog, Client, InviteToken, OAuthAccount, Organization, OrganizationMember, Project, ProjectMember, User
 from ..security import decode_access_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
@@ -15,9 +15,17 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 router = APIRouter(prefix="/rbac", tags=["RBAC"])
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
-CREATOR_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "Individual User"}
-INVITER_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"}
-ADMIN_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"}
+LEGACY_CREATOR_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "Individual User"}
+LEGACY_INVITER_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"}
+LEGACY_ADMIN_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"}
+MODERN_ADMIN_ROLES = {"org_admin"}
+MODERN_PROJECT_MANAGER_ROLES = {"project_manager"}
+MODERN_INVITER_ROLES = {"org_admin"}
+MODERN_CREATOR_ROLES = {"org_admin", "project_manager"}
+SUPPORTED_MODERN_ROLES = {"employee", "project_manager", "finance", "org_admin", "client"}
+CREATOR_ROLES = LEGACY_CREATOR_ROLES.union(MODERN_CREATOR_ROLES)
+INVITER_ROLES = LEGACY_INVITER_ROLES.union(MODERN_INVITER_ROLES)
+ADMIN_ROLES = LEGACY_ADMIN_ROLES.union(MODERN_ADMIN_ROLES)
 LEGACY_MEMBERSHIP_ROLES = {"Owner", "Member"}
 
 
@@ -53,13 +61,16 @@ def get_manageable_roles(actor_role: str) -> set[str]:
             "Company Admin",
             "Company User",
             "Individual User",
+            *SUPPORTED_MODERN_ROLES,
         }
     if actor_role == "Agency Admin":
-        return {"Agency Company Admin", "Agency User"}
+        return {"Agency Company Admin", "Agency User", "employee", "project_manager", "finance", "client"}
     if actor_role == "Agency Company Admin":
-        return {"Agency User"}
+        return {"Agency User", "employee", "project_manager", "finance", "client"}
     if actor_role == "Company Admin":
-        return {"Company User"}
+        return {"Company User", "employee", "project_manager", "finance", "client"}
+    if actor_role == "org_admin":
+        return {"employee", "project_manager", "finance", "client"}
     return set()
 
 
@@ -88,6 +99,85 @@ def get_org_role(db: Session, organization: Organization, user: User) -> str:
 def get_user_role_for_org(db: Session, organization_id: int, user: User) -> str:
     membership = get_org_membership(db, organization_id, user.id)
     return get_effective_scoped_role(membership.role if membership else None, user.role)
+
+
+def ensure_organization_management_access(db: Session, organization_id: int, current_user: User) -> Organization:
+    org = db.query(Organization).filter(Organization.id == organization_id).first()
+    if not org:
+        raise HTTPException(status_code=404, detail="Organization not found")
+    if organization_id not in get_visible_organization_ids(db, current_user):
+        raise HTTPException(status_code=403, detail="You cannot manage this organization")
+    actor_role = "Super Admin" if (current_user.role or "").strip() == "Super Admin" else get_org_role(db, org, current_user)
+    if actor_role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this organization")
+    return org
+
+
+def ensure_project_management_access(db: Session, project_id: int, current_user: User) -> Project:
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    org = ensure_organization_management_access(db, project.organization_id, current_user)
+    actor_role = "Super Admin" if (current_user.role or "").strip() == "Super Admin" else get_org_role(db, org, current_user)
+    if actor_role not in ADMIN_ROLES:
+        raise HTTPException(status_code=403, detail="Not allowed to manage this project")
+    return project
+
+
+def serialize_organization_summary(db: Session, organization: Organization) -> dict:
+    creator = db.query(User).filter(User.id == organization.created_by).first() if organization.created_by else None
+    members = get_organization_member_payload(db, organization.id, organization.created_by)
+    return {
+        "id": organization.id,
+        "name": organization.name,
+        "type": organization.type,
+        "projects": len(organization.projects),
+        "members": len({member["user_id"] for member in members}),
+        "status": organization.status,
+        "created_by": organization.created_by,
+        "created_by_email": creator.email if creator else None,
+    }
+
+
+def serialize_project_summary(db: Session, project: Project, current_user: User) -> dict:
+    creator = db.query(User).filter(User.id == project.created_by).first() if project.created_by else None
+    org = db.query(Organization).filter(Organization.id == project.organization_id).first()
+    members = get_project_member_payload(db, project.id)
+    return {
+        "id": project.id,
+        "name": project.name,
+        "org": project.organization.name if project.organization else (org.name if org else None),
+        "role": get_org_role(db, org, current_user) if org else (current_user.role or "user"),
+        "members": len({member["user_id"] for member in members}),
+        "status": project.status,
+        "client_id": project.client_id,
+        "description": project.description,
+        "start_date": project.start_date.isoformat() if project.start_date else None,
+        "end_date": project.end_date.isoformat() if project.end_date else None,
+        "expected_outcome": project.expected_outcome,
+        "deadline_datetime": project.deadline_datetime.isoformat() if project.deadline_datetime else None,
+        "created_by": project.created_by,
+        "created_by_email": creator.email if creator else None,
+    }
+
+
+def validate_client_scope(
+    db: Session,
+    *,
+    role: str,
+    organization_ids: list[int],
+    client_id: int | None,
+) -> int | None:
+    if role != "client":
+        return None
+    if client_id is None:
+        raise HTTPException(status_code=400, detail="client_id is required when assigning the client role")
+    if len(organization_ids) != 1:
+        raise HTTPException(status_code=400, detail="client role assignments must target exactly one organization")
+    client = db.query(Client).filter(Client.id == client_id, Client.org_id == organization_ids[0]).first()
+    if not client:
+        raise HTTPException(status_code=400, detail="client_id must belong to the selected organization")
+    return client_id
 
 
 def get_manageable_roles_for_orgs(db: Session, current_user: User, organization_ids: list[int]) -> set[str]:
@@ -317,6 +407,12 @@ def list_projects(db: Session = Depends(get_db), current_user: User = Depends(ge
             "role": get_org_role(db, org, current_user) if org else (current_user.role or "user"),
             "members": len({member["user_id"] for member in members}),
             "status": p.status,
+            "client_id": p.client_id,
+            "description": p.description,
+            "start_date": p.start_date.isoformat() if p.start_date else None,
+            "end_date": p.end_date.isoformat() if p.end_date else None,
+            "expected_outcome": p.expected_outcome,
+            "deadline_datetime": p.deadline_datetime.isoformat() if p.deadline_datetime else None,
             "created_by": p.created_by,
             "created_by_email": creator.email if creator else None,
         })
@@ -327,11 +423,13 @@ def can_assign_role(assigner_role: str, target_role: str) -> bool:
     if assigner_role == "Super Admin":
         return True
     if assigner_role == "Agency Admin":
-        return target_role in {"Agency Company Admin", "Agency User"}
+        return target_role in {"Agency Company Admin", "Agency User", "employee", "project_manager", "finance", "client"}
     if assigner_role == "Agency Company Admin":
-        return target_role in {"Agency User"}
+        return target_role in {"Agency User", "employee", "project_manager", "finance", "client"}
     if assigner_role == "Company Admin":
-        return target_role in {"Company User"}
+        return target_role in {"Company User", "employee", "project_manager", "finance", "client"}
+    if assigner_role == "org_admin":
+        return target_role in {"employee", "project_manager", "finance", "client"}
     return False
 
 
@@ -341,7 +439,7 @@ def ensure_project_assignment_access(db: Session, project: Project, current_user
         raise HTTPException(status_code=404, detail="Organization not found")
 
     assigner_role = get_org_role(db, org, current_user)
-    if assigner_role not in ADMIN_ROLES and assigner_role not in {"Agency Company Admin", "Company Admin"}:
+    if assigner_role not in ADMIN_ROLES and assigner_role not in {"Agency Company Admin", "Company Admin", "project_manager"}:
         raise HTTPException(status_code=403, detail="Not allowed to manage project members")
 
     if assigner_role != "Super Admin":
@@ -485,6 +583,7 @@ def list_users(
     users = user_query.all()
     results = []
     for u in users:
+        membership = get_org_membership(db, org_id, u.id) if org_id is not None else None
         invite = (
             db.query(InviteToken)
             .filter(InviteToken.user_id == u.id, InviteToken.used_at.is_(None), InviteToken.expires_at > datetime.utcnow())
@@ -495,6 +594,7 @@ def list_users(
             "id": u.id,
             "email": u.email,
             "role": get_user_role_for_org(db, org_id, u) if org_id is not None else (u.role or "user"),
+            "client_id": membership.client_id if membership else None,
             "org": "All",
             "status": "Active" if u.hashed_password or u.oauth_accounts else "Pending",
             "invite_link": f"{FRONTEND_URL}/oauth/magic?token={invite.token}" if invite else None,
@@ -529,14 +629,7 @@ def create_organization(payload: dict, db: Session = Depends(get_db), current_us
         created_at=datetime.utcnow(),
     ))
     db.commit()
-    return {
-        "id": org.id,
-        "name": org.name,
-        "type": org.type,
-        "projects": 0,
-        "members": 0,
-        "status": org.status,
-    }
+    return serialize_organization_summary(db, org)
 
 
 @router.post("/projects", status_code=201)
@@ -553,11 +646,28 @@ def create_project(payload: dict, db: Session = Depends(get_db), current_user: U
     actor_role = "Super Admin" if (current_user.role or "").strip() == "Super Admin" else get_org_role(db, org, current_user)
     if actor_role not in CREATOR_ROLES:
         raise HTTPException(status_code=403, detail="Not allowed to create projects")
-    project = Project(name=name, organization_id=org_id, status="Active", created_by=current_user.id)
+    client_id = payload.get("client_id")
+    client = None
+    if client_id is not None:
+        client = db.query(Client).filter(Client.id == client_id, Client.org_id == org.id).first()
+        if not client:
+            raise HTTPException(status_code=400, detail="client_id must belong to this organization")
+    project = Project(
+        name=name,
+        organization_id=org_id,
+        client_id=client.id if client else None,
+        description=payload.get("description"),
+        start_date=payload.get("start_date"),
+        end_date=payload.get("end_date"),
+        expected_outcome=payload.get("expected_outcome"),
+        deadline_datetime=payload.get("deadline_datetime"),
+        status=payload.get("status") or "Active",
+        created_by=current_user.id,
+    )
     db.add(project)
     db.commit()
     db.refresh(project)
-    db.add(ProjectMember(project_id=project.id, user_id=current_user.id, role=get_org_role(db, org, current_user) or "Owner"))
+    db.add(ProjectMember(project_id=project.id, user_id=current_user.id, role="manager" if actor_role in {"project_manager", "org_admin"} else (get_org_role(db, org, current_user) or "Owner")))
     db.add(AuditLog(
         action="project_created",
         actor_id=current_user.id,
@@ -567,21 +677,14 @@ def create_project(payload: dict, db: Session = Depends(get_db), current_user: U
         created_at=datetime.utcnow(),
     ))
     db.commit()
-    return {
-        "id": project.id,
-        "name": project.name,
-        "org": org.name,
-        "role": get_org_role(db, org, current_user) or "user",
-        "members": 0,
-        "status": project.status,
-        "created_by": project.created_by,
-    }
+    return serialize_project_summary(db, project, current_user)
 
 
 @router.post("/users/invite", status_code=201)
 def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     email = payload.get("email")
     role = payload.get("role", "user")
+    client_id = payload.get("client_id")
     organization_ids = payload.get("organization_ids") or []
     if not email:
         raise HTTPException(status_code=400, detail="email is required")
@@ -597,6 +700,12 @@ def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User
         raise HTTPException(status_code=403, detail="Not allowed to invite users")
     if role not in get_manageable_roles_for_orgs(db, current_user, selected_org_ids):
         raise HTTPException(status_code=403, detail="You cannot invite this role")
+    scoped_client_id = validate_client_scope(
+        db,
+        role=role,
+        organization_ids=selected_org_ids,
+        client_id=client_id,
+    )
     existing = db.query(User).filter(User.email == email).first()
     if existing:
         raise HTTPException(status_code=400, detail="User already exists")
@@ -630,7 +739,14 @@ def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User
                 OrganizationMember.user_id == new_user.id,
             ).first()
             if not existing_membership:
-                db.add(OrganizationMember(organization_id=org.id, user_id=new_user.id, role=role))
+                db.add(
+                    OrganizationMember(
+                        organization_id=org.id,
+                        user_id=new_user.id,
+                        role=role,
+                        client_id=scoped_client_id,
+                    )
+                )
     db.add(AuditLog(
         action="user_invited",
         actor_id=current_user.id,
@@ -645,6 +761,7 @@ def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User
         "id": new_user.id,
         "email": new_user.email,
         "role": new_user.role,
+        "client_id": scoped_client_id,
         "status": "Invited",
         "invite_link": f"{FRONTEND_URL}/oauth/magic?token={token}",
         "expires_at": expires_at.isoformat(),
@@ -654,6 +771,7 @@ def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User
 @router.patch("/users/{user_id}/role")
 def update_user_role(user_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     role = payload.get("role")
+    client_id = payload.get("client_id")
     organization_ids = payload.get("organization_ids") or []
     if not role:
         raise HTTPException(status_code=400, detail="role is required")
@@ -670,14 +788,21 @@ def update_user_role(user_id: int, payload: dict, db: Session = Depends(get_db),
         raise HTTPException(status_code=403, detail="Admin role required")
     if role not in get_manageable_roles_for_orgs(db, current_user, scoped_org_ids or list(visible_org_ids)):
         raise HTTPException(status_code=403, detail="You cannot assign this role")
+    scoped_client_id = validate_client_scope(
+        db,
+        role=role,
+        organization_ids=scoped_org_ids,
+        client_id=client_id,
+    ) if scoped_org_ids else None
     for org_id in scoped_org_ids:
         membership = get_org_membership(db, org_id, user.id)
         if membership:
             membership.role = role
+            membership.client_id = scoped_client_id if role == "client" else None
     user.role = role
     db.commit()
     db.refresh(user)
-    return {"id": user.id, "email": user.email, "role": user.role, "status": "Active"}
+    return {"id": user.id, "email": user.email, "role": user.role, "client_id": scoped_client_id, "status": "Active"}
 
 
 @router.delete("/users/{user_id}", status_code=204)
@@ -711,10 +836,7 @@ def delete_user(user_id: int, db: Session = Depends(get_db), current_user: User 
 
 @router.patch("/organizations/{org_id}")
 def update_organization(org_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_role(current_user, {"Super Admin"}, "Only Super Admin can update organizations")
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = ensure_organization_management_access(db, org_id, current_user)
     name = payload.get("name")
     status_value = payload.get("status")
     org_type = payload.get("type")
@@ -735,15 +857,12 @@ def update_organization(org_id: int, payload: dict, db: Session = Depends(get_db
         created_at=datetime.utcnow(),
     ))
     db.commit()
-    return org
+    return serialize_organization_summary(db, org)
 
 
 @router.delete("/organizations/{org_id}", status_code=204)
 def delete_organization(org_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_role(current_user, {"Super Admin"}, "Only Super Admin can delete organizations")
-    org = db.query(Organization).filter(Organization.id == org_id).first()
-    if not org:
-        raise HTTPException(status_code=404, detail="Organization not found")
+    org = ensure_organization_management_access(db, org_id, current_user)
     # Clean dependent memberships before deleting projects/org
     project_ids = [p.id for p in org.projects]
     if project_ids:
@@ -766,16 +885,32 @@ def delete_organization(org_id: int, db: Session = Depends(get_db), current_user
 
 @router.patch("/projects/{project_id}")
 def update_project(project_id: int, payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_role(current_user, {"Super Admin"}, "Only Super Admin can update projects")
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = ensure_project_management_access(db, project_id, current_user)
     name = payload.get("name")
     status_value = payload.get("status")
+    client_id = payload.get("client_id")
     if name:
         project.name = name
     if status_value:
         project.status = status_value
+    if "description" in payload:
+        project.description = payload.get("description")
+    if "start_date" in payload:
+        project.start_date = payload.get("start_date")
+    if "end_date" in payload:
+        project.end_date = payload.get("end_date")
+    if "expected_outcome" in payload:
+        project.expected_outcome = payload.get("expected_outcome")
+    if "deadline_datetime" in payload:
+        project.deadline_datetime = payload.get("deadline_datetime")
+    if "client_id" in payload:
+        if client_id is None:
+            project.client_id = None
+        else:
+            client = db.query(Client).filter(Client.id == client_id, Client.org_id == project.organization_id).first()
+            if not client:
+                raise HTTPException(status_code=400, detail="client_id must belong to the project organization")
+            project.client_id = client.id
     db.commit()
     db.refresh(project)
     db.add(AuditLog(
@@ -787,15 +922,12 @@ def update_project(project_id: int, payload: dict, db: Session = Depends(get_db)
         created_at=datetime.utcnow(),
     ))
     db.commit()
-    return project
+    return serialize_project_summary(db, project, current_user)
 
 
 @router.delete("/projects/{project_id}", status_code=204)
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    require_role(current_user, {"Super Admin"}, "Only Super Admin can delete projects")
-    project = db.query(Project).filter(Project.id == project_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
+    project = ensure_project_management_access(db, project_id, current_user)
     db.query(ProjectMember).filter(ProjectMember.project_id == project.id).delete(synchronize_session=False)
     db.add(AuditLog(
         action="project_deleted",

@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useSession } from "./session";
-import { decodeJwt } from "jose";
+import { decodeJwt, type JWTPayload } from "jose";
 
 export type Me = {
   email?: string;
@@ -11,27 +11,26 @@ export type Me = {
   userId?: number | null;
 };
 
+type SessionPayload = JWTPayload & {
+  roles?: string[];
+  full_name?: string;
+  uid?: number;
+};
+
 export function useMe(): Me {
   const { token, roles } = useSession();
-  const [me, setMe] = useState<Me>({ roles: roles ?? [] });
-
-  useEffect(() => {
-    if (!token) {
-      setMe({ roles: [] });
-      return;
-    }
+  return useMemo(() => {
+    if (!token) return { roles: [] };
     try {
-      const decoded: any = decodeJwt(token);
-      setMe({
-        email: decoded?.sub,
-        roles: (decoded?.roles as string[]) || roles || [],
-        full_name: decoded?.full_name,
-        userId: typeof decoded?.uid === "number" ? decoded.uid : null,
-      });
+      const decoded = decodeJwt(token) as SessionPayload;
+      return {
+        email: decoded.sub,
+        roles: decoded.roles || roles || [],
+        full_name: decoded.full_name,
+        userId: typeof decoded.uid === "number" ? decoded.uid : null,
+      };
     } catch {
-      setMe({ roles: roles || [] });
+      return { roles: roles || [] };
     }
   }, [token, roles]);
-
-  return me;
 }

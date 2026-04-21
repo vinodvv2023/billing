@@ -6,24 +6,37 @@ import { Badge } from "@/ui/badge";
 import { Button } from "@/ui/button";
 import { Skeleton } from "@/ui/skeleton";
 import { useOrganizations, useCreateOrganization, useUpdateOrganization, useDeleteOrganization } from "@/lib/api-hooks";
-import { useSession } from "@/lib/session";
 import { useTenantScope } from "@/lib/tenant-scope";
 import { Input } from "@/ui/input";
 import { useToast } from "@/ui/toast";
 import { useState } from "react";
 import { AlertCircle } from "lucide-react";
+import { ClientPortalRedirect } from "@/components/client-portal-redirect";
 
-const adminRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"];
+const orgCreateRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"];
+const orgManageRoles = ["Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "org_admin"];
 
 export default function OrganizationsPage() {
+  const { effectiveRole } = useTenantScope();
+  if (effectiveRole === "client") {
+    return (
+      <ClientPortalRedirect
+        title="Redirecting to invoices"
+        description="Organization setup and tenant management are internal administration functions. Client logins are redirected to the invoice portal."
+      />
+    );
+  }
+  return <InternalOrganizationsPage />;
+}
+
+function InternalOrganizationsPage() {
   const { data, isLoading, error } = useOrganizations();
   const createOrg = useCreateOrganization();
   const updateOrg = useUpdateOrganization();
   const deleteOrg = useDeleteOrganization();
-  const { roles } = useSession();
   const { effectiveRole } = useTenantScope();
-  const canEdit = adminRoles.includes(effectiveRole);
-  const isSuperAdmin = roles.includes("Super Admin");
+  const canCreate = orgCreateRoles.includes(effectiveRole);
+  const canManage = orgManageRoles.includes(effectiveRole);
   const role = effectiveRole || "user";
   const [orgName, setOrgName] = useState("");
   const [orgType, setOrgType] = useState("Company");
@@ -56,7 +69,7 @@ export default function OrganizationsPage() {
           <h2 className="text-xl font-semibold text-white">Organizations</h2>
           <p className="text-sm text-white/60">Companies and agencies with scoped access.</p>
         </div>
-        {canEdit && (
+        {canCreate && (
           <form
             className="flex flex-wrap items-center gap-2"
             onSubmit={(e) => {
@@ -71,13 +84,13 @@ export default function OrganizationsPage() {
               value={orgName}
               onChange={(e) => setOrgName(e.target.value)}
               className="w-48"
-              disabled={!canEdit}
+              disabled={!canCreate}
             />
             <select
               value={orgType}
               onChange={(e) => setOrgType(e.target.value)}
               className="h-11 rounded-[12px] border border-white/15 bg-[#0b1220] px-3 pr-8 text-sm text-white focus:border-amber-400 focus:outline-none appearance-none"
-              disabled={!canEdit}
+              disabled={!canCreate}
             >
               {(role === "Super Admin" || role === "Agency Admin" || role === "Agency Company Admin") && (
                 <>
@@ -87,7 +100,7 @@ export default function OrganizationsPage() {
               )}
               {role === "Company Admin" && <option value="Company">Company</option>}
             </select>
-            <Button size="sm" type="submit" disabled={!canEdit || createOrg.isPending}>New organization</Button>
+            <Button size="sm" type="submit" disabled={!canCreate || createOrg.isPending}>New organization</Button>
           </form>
         )}
       </div>
@@ -183,8 +196,8 @@ export default function OrganizationsPage() {
                   key: "actions",
                   header: "Actions",
                   width: "140px",
-                  render: (r) =>
-                    isSuperAdmin ? (
+            render: (r) =>
+                    canManage ? (
                       <div className="flex gap-2">
                         {editingId === r.id ? (
                           <>

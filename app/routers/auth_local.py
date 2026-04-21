@@ -1,12 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from ..database import get_db
-from ..models import User, InviteToken
+from ..models import InviteToken, OrganizationMember, User
 from ..security import get_password_hash, verify_password, create_access_token, get_roles_from_user, decode_access_token
 
 router = APIRouter(prefix="/auth", tags=["Local Auth"])
@@ -28,6 +28,9 @@ class ProfileResponse(BaseModel):
     email: EmailStr
     full_name: str | None = None
     role: str
+    active_org_id: int | None = None
+    effective_role: str
+    client_id: int | None = None
     access_token: str | None = None
 
 
@@ -47,6 +50,52 @@ def get_current_user(db: Session = Depends(get_db), token: str = Depends(oauth2_
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
+
+
+def get_active_membership(
+    db: Session,
+    user_id: int,
+    org_id: int | None = None,
+) -> OrganizationMember | None:
+    query = db.query(OrganizationMember).filter(OrganizationMember.user_id == user_id)
+    if org_id is not None:
+        membership = query.filter(OrganizationMember.organization_id == org_id).first()
+        if not membership:
+            raise HTTPException(status_code=403, detail="You cannot access that organization context")
+        return membership
+    return query.order_by(OrganizationMember.organization_id.asc(), OrganizationMember.id.asc()).first()
+
+
+def build_profile_response(
+    db: Session,
+    user: User,
+    *,
+    access_token: str | None = None,
+    org_id: int | None = None,
+) -> dict:
+    membership = get_active_membership(db, user.id, org_id)
+    effective_role = membership.role if membership and membership.role else user.role
+    return {
+        "id": user.id,
+        "email": user.email,
+        "full_name": user.full_name,
+        "role": user.role,
+        "active_org_id": membership.organization_id if membership else None,
+        "effective_role": effective_role,
+        "client_id": membership.client_id if membership else None,
+        "access_token": access_token,
+    }
+
+
+def utc_now_like(value: datetime | None) -> datetime:
+    now = datetime.now(timezone.utc)
+    if value is not None and value.tzinfo is None:
+        return now.replace(tzinfo=None)
+    return now
+
+
+def invite_is_expired(invite: InviteToken) -> bool:
+    return invite.expires_at < utc_now_like(invite.expires_at)
 
 @router.post("/register", response_model=TokenInfo)
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -93,13 +142,12 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
 
 
 @router.get("/me", response_model=ProfileResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-    }
+def get_me(
+    org_id: int | None = Query(default=None, description="Optional organization context"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return build_profile_response(db, current_user, org_id=org_id)
 
 
 @router.patch("/me", response_model=ProfileResponse)
@@ -120,11 +168,7 @@ def update_me(payload: ProfileUpdate, db: Session = Depends(get_db), current_use
         "full_name": current_user.full_name,
     })
     return {
-        "id": current_user.id,
-        "email": current_user.email,
-        "full_name": current_user.full_name,
-        "role": current_user.role,
-        "access_token": access_token,
+        **build_profile_response(db, current_user, access_token=access_token),
     }
 
 
@@ -133,7 +177,7 @@ def magic_validate(token: str, db: Session = Depends(get_db)):
     invite = db.query(InviteToken).filter(InviteToken.token == token).first()
     if not invite or invite.used_at is not None:
         raise HTTPException(status_code=400, detail="Link has been used or is invalid")
-    if invite.expires_at < datetime.utcnow():
+    if invite_is_expired(invite):
         raise HTTPException(status_code=400, detail="Link expired")
     user = db.query(User).filter(User.id == invite.user_id).first()
     if not user:
@@ -153,7 +197,7 @@ def magic_accept(body: MagicAcceptPayload, db: Session = Depends(get_db)):
     invite = db.query(InviteToken).filter(InviteToken.token == body.token).first()
     if not invite or invite.used_at is not None:
         raise HTTPException(status_code=400, detail="Link has been used or is invalid")
-    if invite.expires_at < datetime.utcnow():
+    if invite_is_expired(invite):
         raise HTTPException(status_code=400, detail="Link expired")
     user = db.query(User).filter(User.id == invite.user_id).first()
     if not user:
@@ -162,7 +206,7 @@ def magic_accept(body: MagicAcceptPayload, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="User already active")
 
     user.hashed_password = get_password_hash(body.password)
-    invite.used_at = datetime.utcnow()
+    invite.used_at = utc_now_like(invite.expires_at)
     db.commit()
     db.refresh(user)
 

@@ -4,6 +4,7 @@ import { useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { Card, CardContent } from "@/ui/card";
+import { defaultRouteForRoles } from "@/lib/role-routing";
 import { useToast } from "@/ui/toast";
 import { useSession } from "@/lib/session";
 
@@ -15,8 +16,11 @@ function CallbackHandler() {
 
   useEffect(() => {
     const token = searchParams.get("token");
-    const redirect = searchParams.get("redirect") || "/dashboard";
+    const redirect = searchParams.get("redirect");
     if (token) {
+      const parts = token.split(".");
+      const payload = parts.length >= 2 ? JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))) : {};
+      const claimRoles = Array.isArray(payload?.roles) ? payload.roles : typeof payload?.role === "string" ? [payload.role] : [];
       setToken(token);
       push({
         title: "Signed in",
@@ -24,7 +28,7 @@ function CallbackHandler() {
         variant: "success",
         duration: 2400,
       });
-      router.replace(redirect);
+      router.replace(redirect || defaultRouteForRoles(claimRoles));
     } else if (searchParams.toString().length > 0) {
       push({
         title: "Authentication failed",
