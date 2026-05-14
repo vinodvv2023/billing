@@ -15,7 +15,10 @@ echo "sandbox-api is ready"
 echo "Running database migrations..."
 alembic upgrade head
 
-APP_PORT="${PORT:-8000}"
+# Blaxel preview URLs in this setup are mapped to the app port exposed as 8000.
+# Do not inherit the platform's edge/service PORT here, or the preview will proxy
+# to a different internal port and return 502 even though uvicorn is running.
+APP_PORT="${APP_INTERNAL_PORT:-8000}"
 APP_ENV_VALUE="${APP_ENV:-production}"
 APP_WORKERS="${UVICORN_WORKERS:-2}"
 APP_FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-*}"
@@ -44,11 +47,12 @@ PROCESS_PAYLOAD="{
   \"waitForCompletion\": false,
   \"restartOnFailure\": true,
   \"maxRestarts\": 25,
-  \"env\": {
-    \"PORT\": \"${APP_PORT}\",
-    \"APP_ENV\": \"${APP_ENV_VALUE}\",
-    \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
-    \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\"
+    \"env\": {
+      \"PORT\": \"${APP_PORT}\",
+      \"APP_INTERNAL_PORT\": \"${APP_PORT}\",
+      \"APP_ENV\": \"${APP_ENV_VALUE}\",
+      \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
+      \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\"
   }
 }"
 
