@@ -21,8 +21,9 @@ APP_WORKERS="${UVICORN_WORKERS:-2}"
 APP_FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-*}"
 
 # Route the process through an explicit shell so wildcard-like values such as
-# FORWARDED_ALLOW_IPS=* stay quoted and do not break uvicorn argument parsing.
-APP_COMMAND="sh -lc 'exec uvicorn app.main:app --host 0.0.0.0 --port \"${APP_PORT}\" --workers \"${APP_WORKERS}\" --proxy-headers --forwarded-allow-ips \"${APP_FORWARDED_ALLOW_IPS}\"'"
+# FORWARDED_ALLOW_IPS=* stay literal. Avoid embedded double quotes here because
+# the command is serialized into JSON for sandbox-api.
+APP_COMMAND="sh -lc 'exec uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT} --workers ${APP_WORKERS} --proxy-headers --forwarded-allow-ips ${APP_FORWARDED_ALLOW_IPS}'"
 
 echo "Starting BillingApp backend on port ${APP_PORT} through sandbox-api..."
 PROCESS_PAYLOAD="{
