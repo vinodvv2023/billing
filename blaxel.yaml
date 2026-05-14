@@ -1,0 +1,23 @@
+# Advanced Blaxel sandbox manifest for declarative deployment with:
+#   bl apply -f blaxel.yaml
+#
+# This mirrors the backend as a sandbox resource, not as an agent.
+# Replace the placeholder image before applying.
+#
+# Reference:
+# - https://docs.blaxel.ai/cli-reference/commands/bl_apply
+
+apiVersion: blaxel.ai/v1alpha1
+kind: Sandbox
+metadata:
+  name: billing-backend-sandbox
+spec:
+  runtime:
+    image: your-registry.example.com/your-team/billing-backend-sandbox:latest
+    memory: 4096
+  env:
+    APP_ENV: production
+  ports:
+    - name: billing-api
+      target: 8000
+      protocol: tcp

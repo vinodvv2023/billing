@@ -1,0 +1,26 @@
+# Blaxel production sandbox configuration for the BillingApp backend.
+# This is for deploying or mirroring the backend as a sandbox image,
+# not as a Blaxel agent.
+#
+# References:
+# - https://docs.blaxel.ai/deployment-reference
+# - https://docs.blaxel.ai/Sandboxes/Templates
+
+name = "billing-backend-sandbox"
+type = "sandbox"
+description = "BillingApp backend sandbox image for production mirroring on Blaxel"
+
+# Optional: if you want Blaxel to use a prebuilt registry image instead of building from Dockerfile.
+# image = "your-registry.example.com/your-team/billing-backend-sandbox:latest"
+
+[runtime]
+generation = "mk3"
+memory = 4096
+
+[[runtime.ports]]
+name = "billing-api"
+target = 8000
+protocol = "tcp"
+
+[env]
+APP_ENV = "production"

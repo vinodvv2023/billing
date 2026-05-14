@@ -464,6 +464,8 @@ The repository now includes backend container assets:
 - [.dockerignore](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/.dockerignore)
 - [alembic.ini](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/alembic.ini)
 - [alembic](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/alembic)
+- [blaxel.toml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.toml)
+- [blaxel.yaml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.yaml)
 
 Build the backend image:
 
@@ -487,6 +489,39 @@ The container exposes:
 
 - backend on `http://localhost:8000`
 - health check on `http://localhost:8000/healthz`
+
+## Blaxel deployment files
+
+This repository now includes two Blaxel-specific production files:
+
+- [blaxel.toml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.toml)
+  - used by `bl deploy`
+  - configured for a Blaxel `sandbox`, not an agent
+- [blaxel.yaml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.yaml)
+  - used by `bl apply -f blaxel.yaml`
+  - declarative manifest for a Blaxel `Sandbox`
+
+Typical usage:
+
+```powershell
+bl deploy
+```
+
+Advanced manifest usage:
+
+```powershell
+bl apply -f blaxel.yaml
+```
+
+These files are meant for mirroring the backend as a sandbox image on Blaxel.
+
+Before using `blaxel.yaml`, replace the placeholder image:
+
+```yaml
+your-registry.example.com/your-team/billing-backend-sandbox:latest
+```
+
+with the real image that Blaxel can pull.
 
 ## Environment configuration
 
