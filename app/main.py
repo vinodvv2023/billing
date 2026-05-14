@@ -11,6 +11,15 @@ from .routers import auth_local, auth_oauth, billing, clients, rbac, timesheets
 if not settings.is_production:
     Base.metadata.create_all(bind=engine)
 
+print(
+    "Runtime config:"
+    f" APP_ENV={settings.APP_ENV};"
+    f" FRONTEND_URL={settings.FRONTEND_URL};"
+    f" BACKEND_PUBLIC_URL={settings.BACKEND_PUBLIC_URL};"
+    f" TRUSTED_HOSTS={settings.trusted_hosts};"
+    f" CORS_ORIGINS={settings.cors_origins}"
+)
+
 app = FastAPI(title="Multi-Provider OAuth API")
 
 app.add_middleware(
