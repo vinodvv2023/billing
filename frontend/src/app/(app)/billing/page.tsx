@@ -279,6 +279,7 @@ function InternalBillingPage({
   });
   const [lineForm, setLineForm] = useState({ description: "", amount: "0.00" });
   const [financeSection, setFinanceSection] = useState<"overview" | "rates" | "invoices">("overview");
+  const selectedInvoiceData = selectedInvoice.data;
 
   const canManage = ["finance", "org_admin", "Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"].includes(
     effectiveRole
@@ -638,52 +639,54 @@ function InternalBillingPage({
 
       {selectedInvoiceId ? (
         <InvoicePreviewModal
-          invoice={selectedInvoice.data}
+          invoice={selectedInvoiceData}
           title="Internal invoice preview"
           description="Review line items, update status, and keep draft invoice work inside the billing surface."
           onClose={() => setSelectedInvoiceId(null)}
           actions={
-            selectedInvoice.data ? (
+            selectedInvoiceData ? (
               <>
                 <Button
                   size="sm"
                   variant="ghost"
                   leftIcon={<ExternalLink className="h-4 w-4" />}
-                  onClick={() => openInvoiceRender(selectedInvoice.data.id)}
+                  onClick={() => openInvoiceRender(selectedInvoiceData.id)}
                 >
                   Open render
                 </Button>
-                {selectedInvoice.data.status === "draft" ? (
+                {selectedInvoiceData.status === "draft" ? (
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() =>
+                    onClick={() => {
+                      if (!selectedInvoiceData) return;
                       updateInvoice.mutate(
-                        { invoiceId: selectedInvoice.data.id, status: "sent" },
+                        { invoiceId: selectedInvoiceData.id, status: "sent" },
                         {
                           onSuccess: () => toast.push({ title: "Invoice marked sent", variant: "success" }),
                           onError: (error: Error) =>
                             toast.push({ title: "Status update failed", description: error.message, variant: "error" }),
                         }
-                      )
-                    }
+                      );
+                    }}
                   >
                     Mark sent
                   </Button>
                 ) : null}
-                {selectedInvoice.data.status === "sent" ? (
+                {selectedInvoiceData.status === "sent" ? (
                   <Button
                     size="sm"
-                    onClick={() =>
+                    onClick={() => {
+                      if (!selectedInvoiceData) return;
                       updateInvoice.mutate(
-                        { invoiceId: selectedInvoice.data.id, status: "paid" },
+                        { invoiceId: selectedInvoiceData.id, status: "paid" },
                         {
                           onSuccess: () => toast.push({ title: "Invoice marked paid", variant: "success" }),
                           onError: (error: Error) =>
                             toast.push({ title: "Status update failed", description: error.message, variant: "error" }),
                         }
-                      )
-                    }
+                      );
+                    }}
                   >
                     Mark paid
                   </Button>
@@ -692,7 +695,7 @@ function InternalBillingPage({
             ) : undefined
           }
           notes={
-            selectedInvoice.data?.status === "draft" && canManage ? (
+            selectedInvoiceData?.status === "draft" && canManage ? (
               <div className="space-y-3 rounded-[22px] border border-white/10 bg-white/[0.03] px-4 py-4">
                 <div>
                   <div className="text-sm font-semibold text-white">Manual line item</div>
@@ -714,10 +717,11 @@ function InternalBillingPage({
                     className="mt-auto"
                     disabled={!lineForm.description || addInvoiceLine.isPending}
                     isLoading={addInvoiceLine.isPending}
-                    onClick={() =>
+                    onClick={() => {
+                      if (!selectedInvoiceData) return;
                       addInvoiceLine.mutate(
                         {
-                          invoiceId: selectedInvoice.data.id,
+                          invoiceId: selectedInvoiceData.id,
                           description: lineForm.description,
                           amount: lineForm.amount,
                           line_type: "manual",
@@ -730,8 +734,8 @@ function InternalBillingPage({
                           onError: (error: Error) =>
                             toast.push({ title: "Line failed", description: error.message, variant: "error" }),
                         }
-                      )
-                    }
+                      );
+                    }}
                   >
                     Add line
                   </Button>

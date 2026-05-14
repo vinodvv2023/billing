@@ -12,14 +12,20 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential curl libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
+COPY --from=ghcr.io/blaxel-ai/sandbox:latest /sandbox-api /usr/local/bin/sandbox-api
+
 COPY requirements.txt .
 RUN pip install --upgrade pip && pip install -r requirements.txt
 
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
 COPY docs ./docs
 COPY README.md OPERATIONS.md ./
-COPY .env.prod ./.env.prod
+COPY entrypoint.sh /entrypoint.sh
+
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${UVICORN_WORKERS:-2} --proxy-headers --forwarded-allow-ips ${FORWARDED_ALLOW_IPS:-*}"]
+ENTRYPOINT ["/entrypoint.sh"]

@@ -1,0 +1,37 @@
+#!/bin/sh
+set -eu
+
+export PATH="/usr/local/bin:$PATH"
+
+echo "Starting sandbox-api on port 8080..."
+/usr/local/bin/sandbox-api &
+
+echo "Waiting for sandbox-api to become ready..."
+until curl -fsS http://127.0.0.1:8080/health >/dev/null 2>&1; do
+  sleep 0.2
+done
+echo "sandbox-api is ready"
+
+echo "Running database migrations..."
+alembic upgrade head
+
+APP_COMMAND="uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${UVICORN_WORKERS:-2} --proxy-headers --forwarded-allow-ips ${FORWARDED_ALLOW_IPS:-*}"
+
+echo "Starting BillingApp backend on port ${PORT:-8000} through sandbox-api..."
+curl -fsS http://127.0.0.1:8080/process \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"billing-backend\",
+    \"workingDir\": \"/app\",
+    \"command\": \"$APP_COMMAND\",
+    \"waitForCompletion\": false,
+    \"restartOnFailure\": true,
+    \"maxRestarts\": 25,
+    \"env\": {
+      \"PORT\": \"${PORT:-8000}\",
+      \"APP_ENV\": \"${APP_ENV:-production}\"
+    }
+  }"
+
+wait

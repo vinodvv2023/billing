@@ -466,6 +466,7 @@ The repository now includes backend container assets:
 - [alembic](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/alembic)
 - [blaxel.toml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.toml)
 - [blaxel.yaml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/blaxel.yaml)
+- [entrypoint.sh](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/entrypoint.sh)
 
 Build the backend image:
 
@@ -489,6 +490,13 @@ The container exposes:
 
 - backend on `http://localhost:8000`
 - health check on `http://localhost:8000/healthz`
+
+For Blaxel sandbox deployment, the container now:
+
+- copies `sandbox-api` from `ghcr.io/blaxel-ai/sandbox:latest`
+- starts `sandbox-api` on the reserved internal port
+- runs `alembic upgrade head`
+- launches the FastAPI backend through the sandbox process API
 
 ## Blaxel deployment files
 

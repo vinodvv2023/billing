@@ -135,7 +135,7 @@ function EmployeeDashboard({ activeOrganizationId }: { activeOrganizationId: num
           <CardContent className="grid gap-3 sm:grid-cols-3">
             <StatusTile label="Draft" value={draftCount} tone="outline" />
             <StatusTile label="Submitted" value={submittedCount} tone="default" />
-            <StatusTile label="Rejected" value={rejectedCount} tone="danger" />
+            <StatusTile label="Rejected" value={rejectedCount} tone="warn" />
           </CardContent>
         </Card>
 
@@ -173,7 +173,7 @@ function EmployeeDashboard({ activeOrganizationId }: { activeOrganizationId: num
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="text-sm font-semibold text-white">{entry.hours}h</div>
-                  <Badge tone={entry.status === "submitted" ? "default" : entry.status === "rejected" ? "danger" : "outline"}>
+                  <Badge tone={entry.status === "submitted" ? "default" : entry.status === "rejected" ? "warn" : "outline"}>
                     {entry.status}
                   </Badge>
                 </div>
@@ -371,7 +371,7 @@ function StatusTile({
 }: {
   label: string;
   value: number;
-  tone: "outline" | "default" | "danger";
+  tone: "outline" | "default" | "warn";
 }) {
   return (
     <div className="rounded-[18px] border border-white/8 bg-white/[0.03] px-4 py-4">
