@@ -25,22 +25,37 @@ APP_FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-*}"
 APP_COMMAND="sh -lc 'exec uvicorn app.main:app --host 0.0.0.0 --port \"${APP_PORT}\" --workers \"${APP_WORKERS}\" --proxy-headers --forwarded-allow-ips \"${APP_FORWARDED_ALLOW_IPS}\"'"
 
 echo "Starting BillingApp backend on port ${APP_PORT} through sandbox-api..."
-curl -fsS http://127.0.0.1:8080/process \
+PROCESS_PAYLOAD="{
+  \"name\": \"billing-backend\",
+  \"workingDir\": \"/app\",
+  \"command\": \"$APP_COMMAND\",
+  \"waitForCompletion\": false,
+  \"restartOnFailure\": true,
+  \"maxRestarts\": 25,
+  \"env\": {
+    \"PORT\": \"${APP_PORT}\",
+    \"APP_ENV\": \"${APP_ENV_VALUE}\",
+    \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
+    \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\"
+  }
+}"
+
+PROCESS_RESPONSE_FILE="/tmp/billing-backend-process-response.json"
+HTTP_STATUS="$(curl -sS -o "${PROCESS_RESPONSE_FILE}" -w "%{http_code}" http://127.0.0.1:8080/process \
   -X POST \
   -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"billing-backend\",
-    \"workingDir\": \"/app\",
-    \"command\": \"$APP_COMMAND\",
-    \"waitForCompletion\": false,
-    \"restartOnFailure\": true,
-    \"maxRestarts\": 25,
-    \"env\": {
-      \"PORT\": \"${APP_PORT}\",
-      \"APP_ENV\": \"${APP_ENV_VALUE}\",
-      \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
-      \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\"
-    }
-  }"
+  -d "${PROCESS_PAYLOAD}")"
+
+if [ "${HTTP_STATUS}" -lt 200 ] || [ "${HTTP_STATUS}" -ge 300 ]; then
+  echo "sandbox-api process launch failed with HTTP ${HTTP_STATUS}"
+  echo "Process payload:"
+  echo "${PROCESS_PAYLOAD}"
+  echo "Process response:"
+  cat "${PROCESS_RESPONSE_FILE}" || true
+  exit 1
+fi
+
+echo "sandbox-api accepted process launch request:"
+cat "${PROCESS_RESPONSE_FILE}" || true
 
 wait
