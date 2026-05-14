@@ -3,15 +3,13 @@ from fastapi import APIRouter, Request, Depends, HTTPException
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from ..config import settings
 from ..database import get_db
 from ..models import User, OAuthAccount, AuditLog
 from ..security import create_access_token, get_roles_from_user
 from ..oauth_registry import oauth
 
 router = APIRouter(prefix="/auth", tags=["OAuth Providers"])
-
-# Base URL for the frontend, defaults to localhost:3000 but can be overriden securely
-FRONTEND_URL = "http://localhost:3000"
 
 @router.get("/{provider}/login")
 async def login_via_oauth(provider: str, request: Request, json: bool = False):
@@ -179,5 +177,5 @@ async def oauth_callback(provider: str, request: Request, db: Session = Depends(
     
     # Redirect to frontend with token in URL (standard for SPAs handling OAuth)
     # Alternatively could set an HttpOnly cookie here.
-    redirect_url = f"{FRONTEND_URL}/oauth/callback?token={access_token}"
+    redirect_url = f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
     return RedirectResponse(url=redirect_url)

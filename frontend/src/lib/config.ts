@@ -1,5 +1,7 @@
+const fallbackApiUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
+
 export const appConfig = {
-  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000",
+  apiUrl: process.env.NEXT_PUBLIC_API_URL ?? fallbackApiUrl,
   cookieMode: (process.env.NEXT_PUBLIC_COOKIE_MODE ?? "false").toLowerCase() === "true",
   csrfHeaderName: "X-CSRF-Token",
 };

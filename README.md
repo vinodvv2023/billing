@@ -455,9 +455,36 @@ The current `run.bat`:
 - uses `.venv\Scripts\python.exe` if available
 - uses the direct Node/npm path on Windows to avoid broken npm shim issues
 
+## Backend container
+
+The repository now includes backend container assets:
+
+- [Dockerfile](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/Dockerfile)
+- [docker-compose.backend.yml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/docker-compose.backend.yml)
+- [.dockerignore](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/.dockerignore)
+
+Build the backend image:
+
+```powershell
+docker build -t billing-backend:prod .
+```
+
+Run the backend container with the production env file:
+
+```powershell
+docker compose -f docker-compose.backend.yml up --build
+```
+
+The container exposes:
+
+- backend on `http://localhost:8000`
+- health check on `http://localhost:8000/healthz`
+
 ## Environment configuration
 
 Create a root `.env` file. You can use `.env_example.txt` as a starting point.
+
+For production, use [.env.prod](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/.env.prod) as the template and set the same values in your hosting platforms.
 
 ### Required backend variables
 
@@ -465,6 +492,7 @@ Create a root `.env` file. You can use `.env_example.txt` as a starting point.
 DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 SECRET_KEY=replace-with-a-real-secret
 FRONTEND_URL=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000
 ```
 
 ### Frontend environment variables
@@ -515,6 +543,118 @@ OAuth callback pattern:
 
 Example:
 - `http://localhost:8000/auth/github/callback`
+
+## Production deployment
+
+### Target hosting model
+
+- backend on Blaxel.ai
+- frontend on Vercel
+- database on Neon Postgres or any hosted Postgres with SSL enabled
+
+### Production env file example
+
+Root production template:
+
+```env
+APP_ENV=production
+ENV_FILE=.env.prod
+
+DATABASE_URL=postgresql://billing_user:StrongPassword123@ep-cool-db-123456.ap-southeast-1.aws.neon.tech/billingdb?sslmode=require
+SECRET_KEY=replace-with-a-long-random-secret
+
+FRONTEND_URL=https://billing-app.vercel.app
+BACKEND_PUBLIC_URL=https://billing-api.blaxel.ai
+CORS_ORIGINS=https://billing-app.vercel.app,https://billing-app-git-main-vinodvv2023.vercel.app
+
+NEXT_PUBLIC_API_URL=https://billing-api.blaxel.ai
+NEXT_PUBLIC_COOKIE_MODE=false
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+TWITTER_CLIENT_ID=
+TWITTER_CLIENT_SECRET=
+```
+
+### Backend envs for Blaxel.ai
+
+Set these in your Blaxel backend service:
+
+```env
+APP_ENV=production
+ENV_FILE=.env.prod
+DATABASE_URL=postgresql://billing_user:StrongPassword123@ep-cool-db-123456.ap-southeast-1.aws.neon.tech/billingdb?sslmode=require
+SECRET_KEY=replace-with-a-long-random-secret
+FRONTEND_URL=https://billing-app.vercel.app
+CORS_ORIGINS=https://billing-app.vercel.app,https://billing-app-git-main-vinodvv2023.vercel.app
+
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+TWITTER_CLIENT_ID=
+TWITTER_CLIENT_SECRET=
+```
+
+Notes:
+- `FRONTEND_URL` is used for OAuth callback redirection back to the frontend
+- `CORS_ORIGINS` must include every frontend origin allowed to call the backend
+- preview or branch Vercel domains should be added only if you want them to work against the production backend
+
+### Frontend envs for Vercel
+
+Set these in the Vercel project:
+
+```env
+NEXT_PUBLIC_API_URL=https://billing-api.blaxel.ai
+NEXT_PUBLIC_COOKIE_MODE=false
+```
+
+Notes:
+- `NEXT_PUBLIC_API_URL` must point to the public backend base URL
+- the frontend no longer uses `localhost` fallback in production, so this value should always be set in Vercel
+
+### OAuth callback URLs for production
+
+Backend provider callback URLs should point to the backend:
+
+- Google:
+  - `https://billing-api.blaxel.ai/auth/google/callback`
+- GitHub:
+  - `https://billing-api.blaxel.ai/auth/github/callback`
+- Microsoft:
+  - `https://billing-api.blaxel.ai/auth/microsoft/callback`
+- Twitter/X:
+  - `https://billing-api.blaxel.ai/auth/twitter/callback`
+
+The frontend receives the final post-login redirect through:
+
+- `https://billing-app.vercel.app/oauth/callback`
+
+For magic-link invite acceptance, the frontend route is:
+
+- `https://billing-app.vercel.app/oauth/magic`
+
+### Deployment checklist
+
+1. Set backend env vars in Blaxel
+2. Set frontend env vars in Vercel
+3. Confirm `DATABASE_URL` includes SSL requirements
+4. Confirm `FRONTEND_URL` matches the real Vercel production domain
+5. Confirm `CORS_ORIGINS` includes all allowed frontend domains
+6. Confirm every OAuth provider uses the backend callback URL, not the frontend URL
+7. Deploy backend
+8. Deploy frontend
+9. Test local login
+10. Test OAuth login
+11. Test magic-link invite acceptance
+12. Test client portal invoice visibility
 
 ## Database notes
 

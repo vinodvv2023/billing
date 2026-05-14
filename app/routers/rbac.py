@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-import os
 import secrets
 from datetime import datetime, timedelta
 
+from ..config import settings
 from ..database import get_db
 from ..models import AuditLog, Client, InviteToken, OAuthAccount, Organization, OrganizationMember, Project, ProjectMember, User
 from ..security import decode_access_token
@@ -13,7 +13,6 @@ from ..security import decode_access_token
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
 router = APIRouter(prefix="/rbac", tags=["RBAC"])
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 LEGACY_CREATOR_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin", "Individual User"}
 LEGACY_INVITER_ROLES = {"Super Admin", "Agency Admin", "Agency Company Admin", "Company Admin"}
@@ -597,7 +596,7 @@ def list_users(
             "client_id": membership.client_id if membership else None,
             "org": "All",
             "status": "Active" if u.hashed_password or u.oauth_accounts else "Pending",
-            "invite_link": f"{FRONTEND_URL}/oauth/magic?token={invite.token}" if invite else None,
+            "invite_link": f"{settings.FRONTEND_URL}/oauth/magic?token={invite.token}" if invite else None,
             "invite_expires_at": invite.expires_at.isoformat() if invite else None,
         })
     return results
@@ -763,7 +762,7 @@ def invite_user(payload: dict, db: Session = Depends(get_db), current_user: User
         "role": new_user.role,
         "client_id": scoped_client_id,
         "status": "Invited",
-        "invite_link": f"{FRONTEND_URL}/oauth/magic?token={token}",
+        "invite_link": f"{settings.FRONTEND_URL}/oauth/magic?token={token}",
         "expires_at": expires_at.isoformat(),
     }
 

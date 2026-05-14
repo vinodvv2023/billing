@@ -2,8 +2,8 @@ import os
 from authlib.integrations.starlette_client import OAuth
 from starlette.config import Config
 
-# Using environment variables for auth configuration.
-config = Config('.env')
+# Use the already loaded process environment so .env/.env.prod selection stays centralized.
+config = Config(environ=os.environ)
 
 oauth = OAuth(config)
 

@@ -1,6 +1,7 @@
 import { api } from "./api";
 
 type TokenResponse = { access_token: string; token_type: string };
+const fallbackApiUrl = process.env.NODE_ENV === "production" ? "" : "http://localhost:8000";
 
 export async function loginLocal(email: string, password: string): Promise<string> {
   const body = new URLSearchParams({ username: email, password });
@@ -21,8 +22,5 @@ export async function registerLocal(email: string, password: string, role?: stri
 
 // Helper to reuse the api base without importing config elsewhere
 function apiBase() {
-  if (typeof window !== "undefined") {
-    return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
-  }
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+  return process.env.NEXT_PUBLIC_API_URL ?? fallbackApiUrl;
 }
