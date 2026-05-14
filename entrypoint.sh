@@ -19,8 +19,9 @@ alembic upgrade head
 # Do not inherit the platform's edge/service PORT here, or the preview will proxy
 # to a different internal port and return 502 even though uvicorn is running.
 APP_PORT="${APP_INTERNAL_PORT:-8000}"
+APP_HOST="${HOST:-0.0.0.0}"
 APP_ENV_VALUE="${APP_ENV:-production}"
-APP_WORKERS="${UVICORN_WORKERS:-2}"
+APP_WORKERS="${UVICORN_WORKERS:-1}"
 APP_FORWARDED_ALLOW_IPS="${FORWARDED_ALLOW_IPS:-*}"
 
 APP_LAUNCHER="/tmp/start-billing-backend.sh"
@@ -29,7 +30,7 @@ cat > "${APP_LAUNCHER}" <<EOF
 set -eu
 cd /app
 exec uvicorn app.main:app \
-  --host 0.0.0.0 \
+  --host "${APP_HOST}" \
   --port "${APP_PORT}" \
   --workers "${APP_WORKERS}" \
   --proxy-headers \
@@ -50,6 +51,7 @@ PROCESS_PAYLOAD="{
   \"env\": {
     \"PORT\": \"${APP_PORT}\",
     \"APP_INTERNAL_PORT\": \"${APP_PORT}\",
+    \"HOST\": \"${APP_HOST}\",
     \"APP_ENV\": \"${APP_ENV_VALUE}\",
     \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
     \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\",
