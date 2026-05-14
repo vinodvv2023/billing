@@ -462,6 +462,8 @@ The repository now includes backend container assets:
 - [Dockerfile](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/Dockerfile)
 - [docker-compose.backend.yml](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/docker-compose.backend.yml)
 - [.dockerignore](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/.dockerignore)
+- [alembic.ini](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/alembic.ini)
+- [alembic](/C:/Users/xtrem/.codex/worktrees/688b/BillingApp/alembic)
 
 Build the backend image:
 
@@ -473,6 +475,12 @@ Run the backend container with the production env file:
 
 ```powershell
 docker compose -f docker-compose.backend.yml up --build
+```
+
+The compose startup runs Alembic before the app server:
+
+```powershell
+alembic upgrade head
 ```
 
 The container exposes:
@@ -566,6 +574,11 @@ SECRET_KEY=replace-with-a-long-random-secret
 FRONTEND_URL=https://billing-app.vercel.app
 BACKEND_PUBLIC_URL=https://billing-api.blaxel.ai
 CORS_ORIGINS=https://billing-app.vercel.app,https://billing-app-git-main-vinodvv2023.vercel.app
+TRUSTED_HOSTS=billing-app.vercel.app,billing-api.blaxel.ai
+SESSION_COOKIE_SECURE=true
+SESSION_SAME_SITE=lax
+SESSION_COOKIE_DOMAIN=
+FORWARDED_ALLOW_IPS=*
 
 NEXT_PUBLIC_API_URL=https://billing-api.blaxel.ai
 NEXT_PUBLIC_COOKIE_MODE=false
@@ -591,6 +604,11 @@ DATABASE_URL=postgresql://billing_user:StrongPassword123@ep-cool-db-123456.ap-so
 SECRET_KEY=replace-with-a-long-random-secret
 FRONTEND_URL=https://billing-app.vercel.app
 CORS_ORIGINS=https://billing-app.vercel.app,https://billing-app-git-main-vinodvv2023.vercel.app
+TRUSTED_HOSTS=billing-app.vercel.app,billing-api.blaxel.ai
+SESSION_COOKIE_SECURE=true
+SESSION_SAME_SITE=lax
+SESSION_COOKIE_DOMAIN=
+FORWARDED_ALLOW_IPS=*
 
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
@@ -605,6 +623,8 @@ TWITTER_CLIENT_SECRET=
 Notes:
 - `FRONTEND_URL` is used for OAuth callback redirection back to the frontend
 - `CORS_ORIGINS` must include every frontend origin allowed to call the backend
+- `TRUSTED_HOSTS` should include the public frontend and backend hostnames
+- `SESSION_COOKIE_SECURE=true` should remain enabled in production
 - preview or branch Vercel domains should be added only if you want them to work against the production backend
 
 ### Frontend envs for Vercel
@@ -655,6 +675,22 @@ For magic-link invite acceptance, the frontend route is:
 10. Test OAuth login
 11. Test magic-link invite acceptance
 12. Test client portal invoice visibility
+
+## Database migrations
+
+This repository now includes Alembic scaffolding for production-safe schema management.
+
+Local migration commands:
+
+```powershell
+alembic upgrade head
+alembic downgrade -1
+```
+
+Important:
+- development still auto-creates tables if they do not exist
+- production does not run `Base.metadata.create_all()`
+- production should always use Alembic migrations
 
 ## Database notes
 

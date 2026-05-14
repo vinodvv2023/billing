@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
@@ -12,7 +13,14 @@ if not settings.is_production:
 
 app = FastAPI(title="Multi-Provider OAuth API")
 
-app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.SECRET_KEY,
+    same_site=settings.SESSION_SAME_SITE,
+    https_only=settings.session_cookie_secure,
+    domain=settings.SESSION_COOKIE_DOMAIN,
+)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts)
 
 # CORS setup driven by env so frontend can move between local, Vercel, and other hosts.
 app.add_middleware(
