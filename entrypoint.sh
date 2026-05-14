@@ -47,12 +47,31 @@ PROCESS_PAYLOAD="{
   \"waitForCompletion\": false,
   \"restartOnFailure\": true,
   \"maxRestarts\": 25,
-    \"env\": {
-      \"PORT\": \"${APP_PORT}\",
-      \"APP_INTERNAL_PORT\": \"${APP_PORT}\",
-      \"APP_ENV\": \"${APP_ENV_VALUE}\",
-      \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
-      \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\"
+  \"env\": {
+    \"PORT\": \"${APP_PORT}\",
+    \"APP_INTERNAL_PORT\": \"${APP_PORT}\",
+    \"APP_ENV\": \"${APP_ENV_VALUE}\",
+    \"UVICORN_WORKERS\": \"${APP_WORKERS}\",
+    \"FORWARDED_ALLOW_IPS\": \"${APP_FORWARDED_ALLOW_IPS}\",
+    \"DATABASE_URL\": \"${DATABASE_URL:-}\",
+    \"SECRET_KEY\": \"${SECRET_KEY:-}\",
+    \"FRONTEND_URL\": \"${FRONTEND_URL:-}\",
+    \"BACKEND_PUBLIC_URL\": \"${BACKEND_PUBLIC_URL:-}\",
+    \"CORS_ORIGINS\": \"${CORS_ORIGINS:-}\",
+    \"TRUSTED_HOSTS\": \"${TRUSTED_HOSTS:-}\",
+    \"SESSION_COOKIE_SECURE\": \"${SESSION_COOKIE_SECURE:-}\",
+    \"SESSION_SAME_SITE\": \"${SESSION_SAME_SITE:-}\",
+    \"SESSION_COOKIE_DOMAIN\": \"${SESSION_COOKIE_DOMAIN:-}\",
+    \"ACCESS_TOKEN_EXPIRE_MINUTES\": \"${ACCESS_TOKEN_EXPIRE_MINUTES:-}\",
+    \"ALGORITHM\": \"${ALGORITHM:-}\",
+    \"GOOGLE_CLIENT_ID\": \"${GOOGLE_CLIENT_ID:-}\",
+    \"GOOGLE_CLIENT_SECRET\": \"${GOOGLE_CLIENT_SECRET:-}\",
+    \"GITHUB_CLIENT_ID\": \"${GITHUB_CLIENT_ID:-}\",
+    \"GITHUB_CLIENT_SECRET\": \"${GITHUB_CLIENT_SECRET:-}\",
+    \"MICROSOFT_CLIENT_ID\": \"${MICROSOFT_CLIENT_ID:-}\",
+    \"MICROSOFT_CLIENT_SECRET\": \"${MICROSOFT_CLIENT_SECRET:-}\",
+    \"TWITTER_CLIENT_ID\": \"${TWITTER_CLIENT_ID:-}\",
+    \"TWITTER_CLIENT_SECRET\": \"${TWITTER_CLIENT_SECRET:-}\"
   }
 }"
 
