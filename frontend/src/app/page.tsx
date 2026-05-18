@@ -195,9 +195,9 @@ export default function Home() {
 
             <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
               <OAuthButton provider="google" label="Google" icon={GoogleIcon} onClick={() => handleOAuth("google")} isHighlighted={lastOAuth === "google"} />
-              <OAuthButton provider="github" label="GitHub" icon={GithubIcon} onClick={() => handleOAuth("github")} isHighlighted={lastOAuth === "github"} />
-              <OAuthButton provider="microsoft" label="Microsoft" icon={MicrosoftIcon} onClick={() => handleOAuth("microsoft")} isHighlighted={lastOAuth === "microsoft"} />
-              <OAuthButton provider="twitter" label="Twitter" icon={TwitterIcon} onClick={() => handleOAuth("twitter")} isHighlighted={lastOAuth === "twitter"} />
+              <OAuthButton provider="github" label="GitHub" icon={GithubIcon} onClick={() => {}} className="opacity-40 pointer-events-none" />
+              <OAuthButton provider="microsoft" label="Microsoft" icon={MicrosoftIcon} onClick={() => {}} className="opacity-40 pointer-events-none" />
+              <OAuthButton provider="twitter" label="Twitter" icon={TwitterIcon} onClick={() => {}} className="opacity-40 pointer-events-none" />
             </div>
           </div>
         </div>
