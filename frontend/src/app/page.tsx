@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, CheckCircle2, ShieldCheck, Sparkles, Workflow } from "lucide-react";
+import { ArrowUpRight, Building2, CheckCircle2, ClipboardCheck, FileText, Handshake, LucideIcon, Receipt, Send, ShieldCheck, Sparkles, Timer, Users, Workflow } from "lucide-react";
 import { motion } from "framer-motion";
 import { LoginForm } from "@/components/LoginForm";
 import { OAuthButton } from "@/components/OAuthButton";
@@ -202,6 +202,61 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6, delay: 0.3 }}
+        className="relative z-10 mx-auto mt-12 max-w-[1440px]"
+      >
+        <div className="text-center">
+          <div className="inline-flex items-center gap-2 rounded-full border border-amber-400/25 bg-amber-500/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.22em] text-amber-100">
+            How it works
+          </div>
+          <h2 className="mx-auto mt-4 max-w-2xl text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
+            From company setup to paid invoice — the full journey
+          </h2>
+          <p className="mx-auto mt-3 max-w-xl text-base text-white/60">
+            Follow Acme Agency and NovaTech as they set up, log hours, approve work, and settle invoices — all inside one workspace.
+          </p>
+        </div>
+
+        <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          {([
+            { step: "01", icon: Building2, title: "Set up companies", who: "Super Admin", color: "text-sky-300",
+              story: "Sarah, the Super Admin, creates two organizations: Acme Agency (type: Agency) as her own company, and NovaTech (type: Company) representing the client. She then invites internal team members — a Project Manager, Finance lead, and two Delivery Engineers — assigning them roles within Acme." },
+            { step: "02", icon: Users, title: "Invite the client", who: "Super Admin", color: "text-violet-300",
+              story: "Sarah creates a Client record called \"NovaTech\" under Acme Agency, adding a contact name and email. She then invites NovaTech's project coordinator, Priya, as a client user. Priya receives a magic-link email, clicks it, sets her password, and lands directly in the Client Portal — a read-only billing view scoped to NovaTech's invoices." },
+            { step: "03", icon: Timer, title: "Log man-hours", who: "Employees", color: "text-emerald-300",
+              story: "Raj and Anil, the two Delivery Engineers on Acme's team, log their daily hours against the NovaTech project. They pick a date, select the task, enter hours worked, and mark each entry as billable. Entries start as drafts. At the end of the week, both submit their timesheets — status changes from draft to submitted." },
+            { step: "04", icon: ClipboardCheck, title: "Approve job sheets", who: "Project Manager", color: "text-amber-300",
+              story: "Alex, the Project Manager, opens the Approval Queue and sees Raj and Anil's submitted entries. He reviews the hours against the task scope, bulk-approves 14 entries, and flags 2 with a rejection reason for Anil to fix. Approved entries transition to approved and become eligible for invoicing. Anil corrects his entries and resubmits." },
+            { step: "05", icon: FileText, title: "Generate the invoice", who: "Finance", color: "text-rose-300",
+              story: "Mei, Acme's Finance lead, navigates to Billing, clicks \"Unbilled Hours,\" and sees all approved, billable entries grouped by client. She selects NovaTech, sets a billing period, and hits Generate. The system creates a draft invoice — calculating line totals from the billing rates configured for NovaTech ($120/hr). Each timesheet entry is linked to the invoice so it can't be double-billed." },
+            { step: "06", icon: Receipt, title: "Send the invoice", who: "Finance", color: "text-sky-300",
+              story: "Mei reviews the draft invoice, adds a manual line item for a one-time cloud hosting surcharge, adjusts the notes, and marks the invoice as Sent. The status flips from draft to sent, and the invoice immediately becomes visible in Priya's Client Portal at NovaTech. Priya sees the invoice summary with line items, hours, rates, and total." },
+            { step: "07", icon: Handshake, title: "Client reviews", who: "Client", color: "text-violet-300",
+              story: "Priya logs in and sees the new invoice on her Client Portal dashboard under \"Awaiting Payment.\" She clicks into the invoice, reviews each line item — 48 hours of engineering at $120/hr plus the $500 hosting surcharge — and opens the printable HTML view for her records. She shares it with NovaTech's accounts payable team." },
+            { step: "08", icon: Send, title: "Mark as paid", who: "Finance", color: "text-emerald-300",
+              story: "After NovaTech's bank transfer clears, Priya notifies Mei. Mei opens the invoice, marks it as Paid, and the status updates with a paid_at timestamp. Priya's portal now shows it under \"Paid invoices.\" If anything goes wrong, Mei can void an invoice (releasing the timesheet links if still in draft) and regenerate." },
+          ] as { step: string; icon: LucideIcon; title: string; who: string; color: string; story: string }[]).map((item) => (
+            <div
+              key={item.step}
+              className="group relative rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] p-6 shadow-[var(--shadow-md)] backdrop-blur-xl"
+            >
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-xs font-bold tracking-widest text-white/30">{item.step}</span>
+                <div className="inline-flex rounded-full border border-white/10 bg-white/[0.05] p-2">
+                  <item.icon className={`h-4 w-4 ${item.color}`} />
+                </div>
+              </div>
+              <h3 className="mt-4 text-lg font-semibold tracking-[-0.02em] text-white">{item.title}</h3>
+              <span className="mt-1 inline-block rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] font-mono uppercase tracking-[0.18em] text-white/50">{item.who}</span>
+              <p className="mt-3 text-sm leading-6 text-white/58">{item.story}</p>
+            </div>
+          ))}
+        </div>
+      </motion.div>
     </main>
   );
 }
